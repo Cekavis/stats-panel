@@ -11,6 +11,11 @@ node_modules
 dist
 dist-ssr
 *.local
+.dotnet
+sensor-helper/bin
+sensor-helper/obj
+src-tauri/binaries/*.exe
+src-tauri/binaries/publish
 
 # Editor directories and files
 .vscode/*

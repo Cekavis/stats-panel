@@ -3,11 +3,14 @@ use crate::metrics::{
 };
 use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
 use nvml_wrapper::Nvml;
-use std::process::Command;
+use serde::Deserialize;
+use std::sync::{Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
+use tauri::AppHandle;
+use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 
 const CPU_SENSOR_MESSAGE: &str =
-    "Install or run LibreHardwareMonitor with WMI enabled, then restart Stats Panel.";
+    "Bundled sensor helper is unavailable. CPU temperature and power sensors cannot be read.";
 
 pub struct TelemetryCollector {
     system: System,
@@ -19,7 +22,7 @@ pub struct TelemetryCollector {
 }
 
 impl TelemetryCollector {
-    pub fn new() -> Self {
+    pub fn new(hardware_monitor: HardwareMonitorProvider) -> Self {
         let mut system = System::new_all();
         system.refresh_all();
 
@@ -40,7 +43,7 @@ impl TelemetryCollector {
             disks,
             nvml,
             nvml_error,
-            hardware_monitor: HardwareMonitorProvider,
+            hardware_monitor,
         }
     }
 
@@ -272,10 +275,10 @@ impl TelemetryCollector {
         match self.hardware_monitor.read() {
             Ok(reading) => {
                 statuses.push(provider_status(
-                    "libre-hardware-monitor",
-                    "LibreHardwareMonitor",
+                    "bundled-sensor-helper",
+                    "Bundled Sensor Helper",
                     true,
-                    "CPU sensor bridge online.",
+                    &reading.message,
                 ));
                 push_optional_sensor(
                     samples,
@@ -296,22 +299,22 @@ impl TelemetryCollector {
             }
             Err(message) => {
                 statuses.push(provider_status(
-                    "libre-hardware-monitor",
-                    "LibreHardwareMonitor",
+                    "bundled-sensor-helper",
+                    "Bundled Sensor Helper",
                     false,
                     &message,
                 ));
                 samples.push(unavailable_sample(
                     "cpu.temperature",
                     "C",
-                    "LibreHardwareMonitor",
+                    "Bundled Sensor Helper",
                     timestamp,
                     message.clone(),
                 ));
                 samples.push(unavailable_sample(
                     "cpu.power",
                     "W",
-                    "LibreHardwareMonitor",
+                    "Bundled Sensor Helper",
                     timestamp,
                     message,
                 ));
@@ -320,64 +323,164 @@ impl TelemetryCollector {
     }
 }
 
-#[derive(Default)]
-struct HardwareMonitorProvider;
+#[derive(Clone)]
+pub struct HardwareMonitorProvider {
+    state: Arc<Mutex<HardwareMonitorState>>,
+}
 
-#[derive(Default)]
+#[derive(Clone)]
+struct HardwareMonitorState {
+    available: bool,
+    reading: HardwareReading,
+    message: String,
+}
+
+#[derive(Clone, Debug, Default)]
 struct HardwareReading {
     cpu_temperature: Option<f64>,
     cpu_power: Option<f64>,
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HelperReading {
+    available: bool,
+    cpu_temperature: Option<f64>,
+    cpu_power: Option<f64>,
+    message: String,
 }
 
 impl HardwareMonitorProvider {
-    fn read(&self) -> Result<HardwareReading, String> {
-        #[cfg(not(windows))]
-        {
-            return Err(CPU_SENSOR_MESSAGE.to_string());
-        }
-
-        #[cfg(windows)]
-        {
-            let script = r#"
-$namespace = if (Get-CimClass -Namespace root\LibreHardwareMonitor -ClassName Sensor -ErrorAction SilentlyContinue) {
-  'root\LibreHardwareMonitor'
-} elseif (Get-CimClass -Namespace root\OpenHardwareMonitor -ClassName Sensor -ErrorAction SilentlyContinue) {
-  'root\OpenHardwareMonitor'
-} else {
-  $null
-}
-if ($null -eq $namespace) { exit 2 }
-$sensors = Get-CimInstance -Namespace $namespace -ClassName Sensor
-$cpuTemp = $sensors | Where-Object { $_.SensorType -eq 'Temperature' -and ($_.Name -match 'CPU|Package|Tctl|Tdie') } | Sort-Object Value -Descending | Select-Object -First 1
-$cpuPower = $sensors | Where-Object { $_.SensorType -eq 'Power' -and ($_.Name -match 'CPU|Package') } | Sort-Object Value -Descending | Select-Object -First 1
-[PSCustomObject]@{ cpuTemperature = $cpuTemp.Value; cpuPower = $cpuPower.Value } | ConvertTo-Json -Compress
-"#;
-
-            let output = Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    script,
-                ])
-                .output()
-                .map_err(|_| CPU_SENSOR_MESSAGE.to_string())?;
-
-            if !output.status.success() {
-                return Err(CPU_SENSOR_MESSAGE.to_string());
-            }
-
-            let text = String::from_utf8_lossy(&output.stdout);
-            let value: serde_json::Value =
-                serde_json::from_str(text.trim()).map_err(|_| CPU_SENSOR_MESSAGE.to_string())?;
-
-            Ok(HardwareReading {
-                cpu_temperature: value.get("cpuTemperature").and_then(|value| value.as_f64()),
-                cpu_power: value.get("cpuPower").and_then(|value| value.as_f64()),
-            })
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        let message = message.into();
+        Self {
+            state: Arc::new(Mutex::new(HardwareMonitorState {
+                available: false,
+                reading: HardwareReading {
+                    message: message.clone(),
+                    ..HardwareReading::default()
+                },
+                message,
+            })),
         }
     }
+
+    fn read(&self) -> Result<HardwareReading, String> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|error| format!("Bundled sensor helper state is unavailable: {error}"))?;
+
+        if state.available {
+            Ok(state.reading.clone())
+        } else {
+            Err(state.message.clone())
+        }
+    }
+
+    fn apply_helper_reading(&self, reading: HelperReading) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+
+        state.available = reading.available;
+        state.message = reading.message.clone();
+        state.reading = HardwareReading {
+            cpu_temperature: reading.cpu_temperature,
+            cpu_power: reading.cpu_power,
+            message: reading.message,
+        };
+    }
+
+    fn set_unavailable(&self, message: impl Into<String>) {
+        let message = message.into();
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+
+        state.available = false;
+        state.message = message.clone();
+        state.reading = HardwareReading {
+            message,
+            ..HardwareReading::default()
+        };
+    }
+}
+
+pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider {
+    let provider = HardwareMonitorProvider::unavailable(CPU_SENSOR_MESSAGE);
+
+    #[cfg(not(windows))]
+    {
+        provider.set_unavailable(CPU_SENSOR_MESSAGE);
+        provider
+    }
+
+    #[cfg(windows)]
+    {
+        let command = match app.shell().sidecar("stats-sensor-helper") {
+            Ok(command) => command,
+            Err(error) => {
+                provider.set_unavailable(format!("Bundled sensor helper is missing: {error}"));
+                return provider;
+            }
+        };
+
+        let (mut rx, child) = match command.spawn() {
+            Ok(process) => process,
+            Err(error) => {
+                provider.set_unavailable(format!("Bundled sensor helper could not start: {error}"));
+                return provider;
+            }
+        };
+
+        let task_provider = provider.clone();
+        tauri::async_runtime::spawn(async move {
+            let _child = child;
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(line) => {
+                        let text = String::from_utf8_lossy(&line);
+                        let text = text.trim();
+                        if text.is_empty() {
+                            continue;
+                        }
+                        match parse_helper_reading(text) {
+                            Ok(reading) => task_provider.apply_helper_reading(reading),
+                            Err(error) => task_provider.set_unavailable(error),
+                        }
+                    }
+                    CommandEvent::Stderr(line) => {
+                        let text = String::from_utf8_lossy(&line);
+                        let text = text.trim();
+                        if !text.is_empty() {
+                            task_provider
+                                .set_unavailable(format!("Bundled sensor helper error: {text}"));
+                        }
+                    }
+                    CommandEvent::Error(error) => {
+                        task_provider
+                            .set_unavailable(format!("Bundled sensor helper error: {error}"));
+                    }
+                    CommandEvent::Terminated(payload) => {
+                        task_provider.set_unavailable(format!(
+                            "Bundled sensor helper stopped with code {:?}.",
+                            payload.code
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        provider
+    }
+}
+
+fn parse_helper_reading(line: &str) -> Result<HelperReading, String> {
+    serde_json::from_str::<HelperReading>(line)
+        .map_err(|error| format!("Bundled sensor helper returned invalid data: {error}"))
 }
 
 fn push_nvml_metric(
@@ -412,13 +515,13 @@ fn push_optional_sensor(
             id,
             value,
             unit,
-            "LibreHardwareMonitor",
+            "Bundled Sensor Helper",
             timestamp,
         )),
         None => samples.push(unavailable_sample(
             id,
             unit,
-            "LibreHardwareMonitor",
+            "Bundled Sensor Helper",
             timestamp,
             fallback_message,
         )),
@@ -500,5 +603,25 @@ mod tests {
         assert!(samples
             .iter()
             .all(|sample| sample.status == SampleStatus::Unavailable));
+    }
+
+    #[test]
+    fn helper_reading_parses_camel_case_json() {
+        let reading = parse_helper_reading(
+            r#"{"available":true,"cpuTemperature":61.5,"cpuPower":44.25,"message":"online","timestamp":1}"#,
+        )
+        .expect("helper JSON should parse");
+
+        assert!(reading.available);
+        assert_eq!(reading.cpu_temperature, Some(61.5));
+        assert_eq!(reading.cpu_power, Some(44.25));
+        assert_eq!(reading.message, "online");
+    }
+
+    #[test]
+    fn hardware_monitor_provider_returns_helper_message_when_unavailable() {
+        let provider = HardwareMonitorProvider::unavailable("not ready");
+
+        assert_eq!(provider.read().unwrap_err(), "not ready");
     }
 }

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.cekav.statspanel",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run build:helper && npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
@@ -30,6 +30,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/stats-sensor-helper"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

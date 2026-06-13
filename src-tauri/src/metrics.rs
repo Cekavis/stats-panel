@@ -77,7 +77,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "CPU Temperature",
             MetricCategory::Cpu,
             "C",
-            "LibreHardwareMonitor",
+            "Bundled Sensor Helper",
             1,
         ),
         metric(
@@ -85,7 +85,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "CPU Power",
             MetricCategory::Cpu,
             "W",
-            "LibreHardwareMonitor",
+            "Bundled Sensor Helper",
             1,
         ),
         metric(

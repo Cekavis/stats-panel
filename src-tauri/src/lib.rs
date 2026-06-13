@@ -4,7 +4,7 @@ mod providers;
 
 use metrics::{metric_manifest, MetricDefinition};
 use preferences::{load_preferences, save_preferences_to_disk, UserPreferences, WindowPreferences};
-use providers::TelemetryCollector;
+use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
 use std::{sync::Mutex, thread, time::Duration};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
@@ -70,13 +70,14 @@ fn set_window_preferences(
 
 #[tauri::command]
 fn request_sensor_permissions() -> String {
-    "CPU temperature and power require LibreHardwareMonitor or OpenHardwareMonitor with WMI enabled. Run it as administrator if sensors stay unavailable.".to_string()
+    "CPU temperature and power are collected by the bundled sensor helper. If sensors stay unavailable after approving administrator access, the hardware, driver, or firmware may not expose those readings.".to_string()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let preferences = sanitize_preferences(load_preferences(&app_handle));
@@ -88,7 +89,8 @@ pub fn run() {
             apply_window_preferences(&app_handle, &preferences.window)?;
             setup_window_events(app);
             setup_tray(app)?;
-            start_telemetry_loop(app_handle);
+            let hardware_monitor = start_hardware_monitor_helper(&app_handle);
+            start_telemetry_loop(app_handle, hardware_monitor);
 
             Ok(())
         })
@@ -156,9 +158,9 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
     Ok(())
 }
 
-fn start_telemetry_loop(app: AppHandle) {
+fn start_telemetry_loop(app: AppHandle, hardware_monitor: HardwareMonitorProvider) {
     thread::spawn(move || {
-        let mut collector = TelemetryCollector::new();
+        let mut collector = TelemetryCollector::new(hardware_monitor);
 
         loop {
             let snapshot = collector.collect();
