@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Bumped the app version to 0.2.1.
+- Hid the extra Windows console window for debug and release app launches.
 - Bumped the app version to 0.2.0.
 - Split the pure display panel from the settings experience, with settings available from the tray menu.
 - Reworked the display panel into CPU/memory, GPU/VRAM, and network/disk groups with adjacent 30-second charts and visible axes.
