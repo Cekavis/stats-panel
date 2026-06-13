@@ -15,6 +15,7 @@ Use `rtk` before shell commands in this repo.
 - `rtk cargo test` from `src-tauri/`: run Rust unit tests.
 - `rtk cargo clippy --all-targets -- -D warnings` from `src-tauri/`: enforce Rust lint cleanliness.
 - `rtk npm run tauri build -- --debug`: build a debug desktop executable and installer bundles.
+- `rtk powershell -NoProfile -ExecutionPolicy Bypass -File .codex-local\finish-task-install.ps1`: at the end of each task, build the latest release installer and install it locally without deleting existing app data. This script is local-only and must not be committed.
 
 ## Coding Style & Naming Conventions
 
