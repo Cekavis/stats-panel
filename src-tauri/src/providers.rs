@@ -7,7 +7,10 @@ use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
 use tauri::AppHandle;
-use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+use tauri_plugin_shell::{
+    process::{CommandChild, CommandEvent},
+    ShellExt,
+};
 
 const CPU_SENSOR_MESSAGE: &str =
     "Bundled sensor helper is unavailable. CPU temperature and power sensors cannot be read.";
@@ -326,6 +329,7 @@ impl TelemetryCollector {
 #[derive(Clone)]
 pub struct HardwareMonitorProvider {
     state: Arc<Mutex<HardwareMonitorState>>,
+    child: Arc<Mutex<Option<CommandChild>>>,
 }
 
 #[derive(Clone)]
@@ -363,6 +367,7 @@ impl HardwareMonitorProvider {
                 },
                 message,
             })),
+            child: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -406,6 +411,35 @@ impl HardwareMonitorProvider {
             ..HardwareReading::default()
         };
     }
+
+    pub fn stop(&self) {
+        let Ok(mut child) = self.child.lock() else {
+            return;
+        };
+
+        if let Some(child) = child.take() {
+            let _ = child.kill();
+        }
+    }
+
+    fn store_child(&self, child: CommandChild) {
+        let Ok(mut current) = self.child.lock() else {
+            let _ = child.kill();
+            return;
+        };
+
+        if let Some(previous) = current.replace(child) {
+            let _ = previous.kill();
+        }
+    }
+
+    fn clear_child(&self) {
+        let Ok(mut child) = self.child.lock() else {
+            return;
+        };
+
+        let _ = child.take();
+    }
 }
 
 pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider {
@@ -425,7 +459,8 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
                 provider.set_unavailable(format!("Bundled sensor helper is missing: {error}"));
                 return provider;
             }
-        };
+        }
+        .args([format!("--parent-pid={}", std::process::id())]);
 
         let (mut rx, child) = match command.spawn() {
             Ok(process) => process,
@@ -434,10 +469,10 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
                 return provider;
             }
         };
+        provider.store_child(child);
 
         let task_provider = provider.clone();
         tauri::async_runtime::spawn(async move {
-            let _child = child;
             while let Some(event) = rx.recv().await {
                 match event {
                     CommandEvent::Stdout(line) => {
@@ -468,6 +503,7 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
                             "Bundled sensor helper stopped with code {:?}.",
                             payload.code
                         ));
+                        task_provider.clear_child();
                     }
                     _ => {}
                 }

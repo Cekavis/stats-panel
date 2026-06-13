@@ -1,8 +1,10 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LibreHardwareMonitor.Hardware;
 
 var intervalMs = ParseInterval(args);
+var parentPid = ParseParentPid(args);
 var computer = new Computer
 {
     IsCpuEnabled = true,
@@ -27,6 +29,11 @@ try
 
     do
     {
+        if (ParentProcessExited(parentPid))
+        {
+            break;
+        }
+
         try
         {
             computer.Accept(new UpdateVisitor());
@@ -60,6 +67,39 @@ static int ParseInterval(string[] args)
 
     var rawValue = intervalArg.Split('=', 2)[1];
     return int.TryParse(rawValue, out var value) ? Math.Clamp(value, 500, 5000) : defaultInterval;
+}
+
+static int? ParseParentPid(string[] args)
+{
+    var parentArg = args.FirstOrDefault(arg => arg.StartsWith("--parent-pid=", StringComparison.OrdinalIgnoreCase));
+    if (parentArg is null)
+    {
+        return null;
+    }
+
+    var rawValue = parentArg.Split('=', 2)[1];
+    return int.TryParse(rawValue, out var value) && value > 0 ? value : null;
+}
+
+static bool ParentProcessExited(int? parentPid)
+{
+    if (!parentPid.HasValue)
+    {
+        return false;
+    }
+
+    try
+    {
+        return Process.GetProcessById(parentPid.Value).HasExited;
+    }
+    catch (ArgumentException)
+    {
+        return true;
+    }
+    catch (InvalidOperationException)
+    {
+        return true;
+    }
 }
 
 static SensorReading ReadCpuSensors(Computer computer)

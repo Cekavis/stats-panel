@@ -8,7 +8,7 @@ use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, Telemetr
 use std::{sync::Mutex, thread, time::Duration};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
-    LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 struct AppState {
@@ -105,6 +105,7 @@ pub fn run() {
             setup_window_events(app);
             setup_tray(app)?;
             let hardware_monitor = start_hardware_monitor_helper(&app_handle);
+            app.manage(hardware_monitor.clone());
             start_telemetry_loop(app_handle, hardware_monitor);
 
             Ok(())
@@ -116,8 +117,13 @@ pub fn run() {
             set_window_preferences,
             request_sensor_permissions
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, RunEvent::ExitRequested { .. } | RunEvent::Exit) {
+                stop_hardware_monitor_helper(app);
+            }
+        });
 }
 
 fn setup_window_events(app: &mut App) {
@@ -164,6 +170,7 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
             }
             "quit" => {
                 save_window_geometry(app);
+                stop_hardware_monitor_helper(app);
                 app.exit(0);
             }
             _ => {}
@@ -175,6 +182,12 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
 
     builder.build(app)?;
     Ok(())
+}
+
+fn stop_hardware_monitor_helper(app: &AppHandle) {
+    if let Some(provider) = app.try_state::<HardwareMonitorProvider>() {
+        provider.stop();
+    }
 }
 
 fn show_settings_window(app: &AppHandle) -> tauri::Result<()> {
