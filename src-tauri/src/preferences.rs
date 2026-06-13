@@ -43,10 +43,19 @@ impl Default for UserPreferences {
             .into_iter()
             .map(String::from)
             .collect(),
-            chart_metric_ids: vec!["cpu.usage", "gpu.usage", "memory.usage", "network.download"]
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            chart_metric_ids: vec![
+                "cpu.usage",
+                "memory.usage",
+                "gpu.usage",
+                "gpu.memory_usage",
+                "network.download",
+                "network.upload",
+                "disk.read",
+                "disk.write",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect(),
             sample_interval_ms: 1_000,
             window: WindowPreferences::default(),
         }

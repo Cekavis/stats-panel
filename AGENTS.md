@@ -20,6 +20,8 @@ Use `rtk` before shell commands in this repo.
 
 Use TypeScript `strict` mode and React function components. Prefer small, typed helpers over broad utility modules. Use camelCase for TypeScript values and props, PascalCase for components and types. Rust uses `cargo fmt`, snake_case modules/functions, and explicit serde `camelCase` boundaries for frontend-facing JSON.
 
+Every code change must increment the application version number in all project version files.
+
 ## Testing Guidelines
 
 Current automated tests are Rust unit tests in `src-tauri/src/*.rs`. Add tests beside the module they validate, using behavior-focused names such as `preferences_round_trip_as_camel_case_json`. For UI changes, run `rtk npm run build`; add frontend tests only once a test runner is introduced.
@@ -27,6 +29,8 @@ Current automated tests are Rust unit tests in `src-tauri/src/*.rs`. Add tests b
 ## Commit & Pull Request Guidelines
 
 Git history uses Conventional Commits, for example `feat: build stats panel desktop monitor`. Use `feat:`, `fix:`, `docs:`, `test:`, or `chore:` with an imperative summary. Pull requests should include a short description, validation commands run, screenshots or screen recordings for UI changes, and notes about sensor/provider limitations.
+
+After completing requested changes, Codex should create a Conventional Commit for the work unless the user explicitly asks not to commit.
 
 ## Security & Configuration Tips
 

@@ -5,9 +5,7 @@ import {
   Check,
   Gauge,
   MonitorCog,
-  Pin,
-  Settings,
-  X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -25,7 +23,7 @@ import type {
 } from "./types";
 import "./App.css";
 
-const HISTORY_MS = 5 * 60 * 1000;
+const HISTORY_MS = 30 * 1000;
 
 type HistoryPoint = {
   timestamp: number;
@@ -34,22 +32,52 @@ type HistoryPoint = {
 
 type History = Record<string, HistoryPoint[]>;
 
-const CATEGORY_LABELS = {
-  cpu: "CPU",
-  memory: "Memory",
-  gpu: "GPU",
-  network: "Network",
-  disk: "Disk",
+type MetricGroup = {
+  id: string;
+  title: string;
+  metricIds: string[];
 };
+
+const DASHBOARD_GROUPS: MetricGroup[] = [
+  {
+    id: "system",
+    title: "CPU / Memory",
+    metricIds: [
+      "cpu.usage",
+      "cpu.frequency",
+      "cpu.temperature",
+      "cpu.power",
+      "memory.usage",
+      "memory.used",
+    ],
+  },
+  {
+    id: "graphics",
+    title: "GPU / VRAM",
+    metricIds: [
+      "gpu.usage",
+      "gpu.temperature",
+      "gpu.power",
+      "gpu.memory_usage",
+      "gpu.memory_used",
+    ],
+  },
+  {
+    id: "throughput",
+    title: "Network / Disk",
+    metricIds: ["network.download", "network.upload", "disk.read", "disk.write"],
+  },
+];
 
 function App() {
   const [manifest, setManifest] = useState<MetricDefinition[]>([]);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [snapshot, setSnapshot] = useState<TelemetrySnapshot | null>(null);
   const [history, setHistory] = useState<History>({});
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [sensorNote, setSensorNote] = useState("");
   const [error, setError] = useState("");
+
+  const isSettingsView = new URLSearchParams(window.location.search).get("view") === "settings";
 
   useEffect(() => {
     let disposed = false;
@@ -105,29 +133,6 @@ function App() {
     () => new Map(snapshot?.samples.map((sample) => [sample.id, sample]) ?? []),
     [snapshot],
   );
-
-  const visibleMetrics = useMemo(() => {
-    if (!preferences) {
-      return [];
-    }
-    return preferences.visibleMetricIds
-      .map((id) => metricById.get(id))
-      .filter((metric): metric is MetricDefinition => Boolean(metric));
-  }, [metricById, preferences]);
-
-  const chartMetrics = useMemo(() => {
-    if (!preferences) {
-      return [];
-    }
-    return preferences.chartMetricIds
-      .map((id) => metricById.get(id))
-      .filter((metric): metric is MetricDefinition => Boolean(metric));
-  }, [metricById, preferences]);
-
-  const primarySamples = useMemo(() => {
-    const ids = ["cpu.usage", "gpu.usage", "memory.usage", "network.download"];
-    return ids.map((id) => sampleById.get(id)).filter(Boolean) as MetricSample[];
-  }, [sampleById]);
 
   async function persist(nextPreferences: UserPreferences) {
     setPreferences(nextPreferences);
@@ -207,7 +212,7 @@ function App() {
 
   if (error) {
     return (
-      <main className="app-shell is-error">
+      <main className={isSettingsView ? "settings-shell is-error" : "dashboard-shell is-error"}>
         <section className="empty-state">
           <Gauge size={30} />
           <h1>Stats Panel</h1>
@@ -219,7 +224,7 @@ function App() {
 
   if (!preferences) {
     return (
-      <main className="app-shell">
+      <main className={isSettingsView ? "settings-shell" : "dashboard-shell"}>
         <section className="empty-state">
           <Activity size={30} />
           <h1>Stats Panel</h1>
@@ -229,280 +234,281 @@ function App() {
     );
   }
 
+  if (isSettingsView) {
+    return (
+      <SettingsView
+        manifest={manifest}
+        preferences={preferences}
+        providers={snapshot?.providers ?? []}
+        sensorNote={sensorNote}
+        onCompactChange={(compact) => updateWindow("compact", compact)}
+        onIntervalChange={updateInterval}
+        onSensorHelp={showSensorHelp}
+        onToggleChart={toggleChart}
+        onToggleVisible={toggleVisible}
+        onTopChange={(alwaysOnTop) => updateWindow("alwaysOnTop", alwaysOnTop)}
+      />
+    );
+  }
+
   return (
-    <main className={`app-shell ${preferences.window.compact ? "is-compact" : ""}`}>
-      <header className="titlebar" data-tauri-drag-region>
-        <div className="title-lockup" data-tauri-drag-region>
-          <Gauge size={21} />
-          <div data-tauri-drag-region>
-            <h1>Stats Panel</h1>
-            <span>{snapshot ? formatTime(snapshot.timestamp) : "Waiting for telemetry"}</span>
-          </div>
-        </div>
-        <div className="title-actions">
-          <button
-            className={preferences.window.alwaysOnTop ? "icon-button is-active" : "icon-button"}
-            title="Always on top"
-            type="button"
-            onClick={() => updateWindow("alwaysOnTop", !preferences.window.alwaysOnTop)}
-          >
-            <Pin size={17} />
-          </button>
-          <button
-            className={settingsOpen ? "icon-button is-active" : "icon-button"}
-            title="Settings"
-            type="button"
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            <Settings size={18} />
-          </button>
-        </div>
-      </header>
+    <DashboardView
+      history={history}
+      metricById={metricById}
+      preferences={preferences}
+      sampleById={sampleById}
+    />
+  );
+}
 
-      <section className="summary-strip">
-        {primarySamples.map((sample) => {
-          const metric = metricById.get(sample.id);
-          if (!metric) {
-            return null;
-          }
-          return (
-            <div className="summary-item" key={sample.id}>
-              <span>{metric.label}</span>
-              <strong>{formatSample(sample, metric)}</strong>
+function DashboardView({
+  history,
+  metricById,
+  preferences,
+  sampleById,
+}: {
+  history: History;
+  metricById: Map<string, MetricDefinition>;
+  preferences: UserPreferences;
+  sampleById: Map<string, MetricSample>;
+}) {
+  const visible = new Set(preferences.visibleMetricIds);
+  const charted = new Set(preferences.chartMetricIds);
+  const now = Math.max(...Object.values(history).flat().map((point) => point.timestamp), Date.now());
+
+  return (
+    <main
+      className={`dashboard-shell ${preferences.window.compact ? "is-compact" : ""}`}
+      data-tauri-drag-region
+    >
+      <section className="dashboard-grid" aria-label="Stats dashboard" data-tauri-drag-region>
+        {DASHBOARD_GROUPS.map((group) => (
+          <section className="metric-group" key={group.id} data-tauri-drag-region>
+            <h2 data-tauri-drag-region>{group.title}</h2>
+            <div className="metric-list" data-tauri-drag-region>
+              {group.metricIds
+                .filter((id) => visible.has(id))
+                .map((id) => {
+                  const metric = metricById.get(id);
+                  if (!metric) {
+                    return null;
+                  }
+                  return (
+                    <MetricRow
+                      key={metric.id}
+                      metric={metric}
+                      now={now}
+                      points={history[metric.id] ?? []}
+                      sample={sampleById.get(metric.id)}
+                      showChart={charted.has(metric.id)}
+                    />
+                  );
+                })}
             </div>
-          );
-        })}
-      </section>
-
-      <section className="content-layout">
-        <section className="dashboard-pane">
-          <MetricGrid metrics={visibleMetrics} samples={sampleById} />
-          <ChartPanel metrics={chartMetrics} samples={sampleById} history={history} />
-          <ProviderPanel
-            providers={snapshot?.providers ?? []}
-            sensorNote={sensorNote}
-            onSensorHelp={showSensorHelp}
-          />
-        </section>
-
-        {settingsOpen && (
-          <SettingsDrawer
-            manifest={manifest}
-            preferences={preferences}
-            onClose={() => setSettingsOpen(false)}
-            onToggleVisible={toggleVisible}
-            onToggleChart={toggleChart}
-            onIntervalChange={updateInterval}
-            onCompactChange={(compact) => updateWindow("compact", compact)}
-          />
-        )}
+          </section>
+        ))}
       </section>
     </main>
   );
 }
 
-function MetricGrid({
-  metrics,
-  samples,
-}: {
-  metrics: MetricDefinition[];
-  samples: Map<string, MetricSample>;
-}) {
-  return (
-    <section className="metric-grid" aria-label="Metric cards">
-      {metrics.map((metric) => {
-        const sample = samples.get(metric.id);
-        return (
-          <article className="metric-card" key={metric.id}>
-            <div className="metric-card-top">
-              <span className={`category-dot category-${metric.category}`} />
-              <span>{CATEGORY_LABELS[metric.category]}</span>
-            </div>
-            <h2>{metric.label}</h2>
-            <strong className={sample?.status === "ok" ? "" : "is-muted"}>
-              {sample ? formatSample(sample, metric) : "--"}
-            </strong>
-            <p title={sample?.message ?? metric.provider}>
-              {sample?.status === "ok" ? metric.provider : sample?.message ?? "Waiting"}
-            </p>
-          </article>
-        );
-      })}
-    </section>
-  );
-}
-
-function ChartPanel({
-  metrics,
-  samples,
-  history,
-}: {
-  metrics: MetricDefinition[];
-  samples: Map<string, MetricSample>;
-  history: History;
-}) {
-  return (
-    <section className="chart-panel" aria-label="Line charts">
-      <div className="section-heading">
-        <ChartNoAxesCombined size={18} />
-        <h2>Trends</h2>
-      </div>
-      {metrics.length === 0 ? (
-        <p className="muted-copy">No chart metrics selected.</p>
-      ) : (
-        <div className="chart-stack">
-          {metrics.map((metric) => (
-            <MiniChart
-              key={metric.id}
-              metric={metric}
-              sample={samples.get(metric.id)}
-              points={history[metric.id] ?? []}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function MiniChart({
+function MetricRow({
   metric,
-  sample,
+  now,
   points,
+  sample,
+  showChart,
 }: {
   metric: MetricDefinition;
-  sample: MetricSample | undefined;
+  now: number;
   points: HistoryPoint[];
+  sample: MetricSample | undefined;
+  showChart: boolean;
 }) {
-  const path = buildPath(points);
-
   return (
-    <article className="mini-chart">
-      <div className="mini-chart-meta">
+    <article className="metric-row">
+      <div className="metric-value">
         <span>{metric.label}</span>
-        <strong>{sample ? formatSample(sample, metric) : "--"}</strong>
+        <strong className={sample?.status === "ok" ? "" : "is-muted"}>
+          {sample ? formatSample(sample, metric) : "--"}
+        </strong>
       </div>
-      <svg viewBox="0 0 240 64" role="img" aria-label={`${metric.label} trend`}>
-        <path className="chart-gridline" d="M0 48H240" />
-        <path className="chart-gridline" d="M0 24H240" />
-        {path ? <path className={`chart-line category-${metric.category}`} d={path} /> : null}
-      </svg>
+      <AxisChart metric={metric} now={now} points={showChart ? points : []} />
     </article>
   );
 }
 
-function ProviderPanel({
-  providers,
-  sensorNote,
-  onSensorHelp,
+function AxisChart({
+  metric,
+  now,
+  points,
 }: {
-  providers: ProviderStatus[];
-  sensorNote: string;
-  onSensorHelp: () => void;
+  metric: MetricDefinition;
+  now: number;
+  points: HistoryPoint[];
 }) {
+  const domain = getChartDomain(metric, points);
+  const path = buildPath(points, now, domain);
+  const topLabel = formatAxisValue(domain.max, metric);
+  const bottomLabel = formatAxisValue(domain.min, metric);
+
   return (
-    <section className="provider-panel">
-      <div className="section-heading">
-        <MonitorCog size={18} />
-        <h2>Providers</h2>
-      </div>
-      <div className="provider-list">
-        {providers.map((provider) => (
-          <div className="provider-row" key={provider.id}>
-            <span className={provider.available ? "status-pill is-online" : "status-pill"}>
-              {provider.available ? "Online" : "Offline"}
-            </span>
-            <div>
-              <strong>{provider.label}</strong>
-              <p>{provider.message}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <button className="text-button" type="button" onClick={onSensorHelp}>
-        Sensor access
-      </button>
-      {sensorNote && <p className="muted-copy">{sensorNote}</p>}
-    </section>
+    <svg className="axis-chart" viewBox="0 0 260 92" role="img" aria-label={`${metric.label} 30s trend`}>
+      <path className="chart-axis" d="M38 12V68H246" />
+      <path className="chart-gridline" d="M38 12H246" />
+      <path className="chart-gridline" d="M38 40H246" />
+      <path className="chart-gridline" d="M38 68H246" />
+      <text className="axis-label axis-y-top" x="4" y="15">
+        {topLabel}
+      </text>
+      <text className="axis-label axis-y-bottom" x="4" y="71">
+        {bottomLabel}
+      </text>
+      <text className="axis-label axis-x-left" x="38" y="85">
+        30s
+      </text>
+      <text className="axis-label axis-x-right" x="225" y="85">
+        now
+      </text>
+      {path ? <path className={`chart-line category-${metric.category}`} d={path} /> : null}
+    </svg>
   );
 }
 
-function SettingsDrawer({
+function SettingsView({
   manifest,
   preferences,
-  onClose,
-  onToggleVisible,
-  onToggleChart,
-  onIntervalChange,
+  providers,
+  sensorNote,
   onCompactChange,
+  onIntervalChange,
+  onSensorHelp,
+  onToggleChart,
+  onToggleVisible,
+  onTopChange,
 }: {
   manifest: MetricDefinition[];
   preferences: UserPreferences;
-  onClose: () => void;
-  onToggleVisible: (id: string) => void;
-  onToggleChart: (id: string) => void;
-  onIntervalChange: (value: number) => void;
+  providers: ProviderStatus[];
+  sensorNote: string;
   onCompactChange: (value: boolean) => void;
+  onIntervalChange: (value: number) => void;
+  onSensorHelp: () => void;
+  onToggleChart: (id: string) => void;
+  onToggleVisible: (id: string) => void;
+  onTopChange: (value: boolean) => void;
 }) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
 
   return (
-    <aside className="settings-drawer">
-      <div className="settings-heading">
-        <h2>Customize</h2>
-        <button className="icon-button" title="Close settings" type="button" onClick={onClose}>
-          <X size={18} />
-        </button>
-      </div>
+    <main className="settings-shell">
+      <header className="settings-titlebar" data-tauri-drag-region>
+        <div data-tauri-drag-region>
+          <h1>Stats Panel Settings</h1>
+          <span>Display, sampling, and data sources</span>
+        </div>
+        <SlidersHorizontal size={21} />
+      </header>
 
-      <label className="range-control">
-        <span>Sampling</span>
-        <strong>{preferences.sampleIntervalMs} ms</strong>
-        <input
-          max="5000"
-          min="500"
-          step="500"
-          type="range"
-          value={preferences.sampleIntervalMs}
-          onChange={(event) => onIntervalChange(Number(event.currentTarget.value))}
-        />
-      </label>
-
-      <label className="switch-row">
-        <span>Compact cards</span>
-        <input
-          checked={preferences.window.compact}
-          type="checkbox"
-          onChange={(event) => onCompactChange(event.currentTarget.checked)}
-        />
-      </label>
-
-      <div className="metric-toggle-list">
-        {manifest.map((metric) => (
-          <div className="metric-toggle-row" key={metric.id}>
-            <button
-              className={visible.has(metric.id) ? "toggle-button is-on" : "toggle-button"}
-              type="button"
-              title={`Show ${metric.label}`}
-              onClick={() => onToggleVisible(metric.id)}
-            >
-              {visible.has(metric.id) ? <Check size={14} /> : null}
-            </button>
-            <span>{metric.label}</span>
-            <button
-              className={charted.has(metric.id) ? "chart-toggle is-on" : "chart-toggle"}
-              disabled={!visible.has(metric.id)}
-              type="button"
-              title={`Chart ${metric.label}`}
-              onClick={() => onToggleChart(metric.id)}
-            >
-              <ChartNoAxesCombined size={15} />
-            </button>
+      <section className="settings-content">
+        <section className="settings-section">
+          <div className="settings-section-heading">
+            <Gauge size={18} />
+            <h2>Panel</h2>
           </div>
-        ))}
-      </div>
-    </aside>
+          <label className="range-control">
+            <span>Sampling</span>
+            <strong>{preferences.sampleIntervalMs} ms</strong>
+            <input
+              max="5000"
+              min="500"
+              step="500"
+              type="range"
+              value={preferences.sampleIntervalMs}
+              onChange={(event) => onIntervalChange(Number(event.currentTarget.value))}
+            />
+          </label>
+
+          <label className="switch-row">
+            <span>Compact rows</span>
+            <input
+              checked={preferences.window.compact}
+              type="checkbox"
+              onChange={(event) => onCompactChange(event.currentTarget.checked)}
+            />
+          </label>
+
+          <label className="switch-row">
+            <span>Always on top</span>
+            <input
+              checked={preferences.window.alwaysOnTop}
+              type="checkbox"
+              onChange={(event) => onTopChange(event.currentTarget.checked)}
+            />
+          </label>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-heading">
+            <ChartNoAxesCombined size={18} />
+            <h2>Metrics</h2>
+          </div>
+          <div className="metric-toggle-list">
+            {manifest.map((metric) => (
+              <div className="metric-toggle-row" key={metric.id}>
+                <button
+                  className={visible.has(metric.id) ? "toggle-button is-on" : "toggle-button"}
+                  type="button"
+                  title={`Show ${metric.label}`}
+                  onClick={() => onToggleVisible(metric.id)}
+                >
+                  {visible.has(metric.id) ? <Check size={14} /> : null}
+                </button>
+                <span>{metric.label}</span>
+                <button
+                  className={charted.has(metric.id) ? "chart-toggle is-on" : "chart-toggle"}
+                  disabled={!visible.has(metric.id)}
+                  type="button"
+                  title={`Chart ${metric.label}`}
+                  onClick={() => onToggleChart(metric.id)}
+                >
+                  <ChartNoAxesCombined size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-heading">
+            <MonitorCog size={18} />
+            <h2>Data Sources</h2>
+          </div>
+          <div className="provider-list">
+            {providers.length === 0 ? (
+              <p className="muted-copy">Waiting for telemetry providers...</p>
+            ) : (
+              providers.map((provider) => (
+                <div className="provider-row" key={provider.id}>
+                  <span className={provider.available ? "status-pill is-online" : "status-pill"}>
+                    {provider.available ? "Online" : "Offline"}
+                  </span>
+                  <div>
+                    <strong>{provider.label}</strong>
+                    <p>{provider.message}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <button className="text-button" type="button" onClick={onSensorHelp}>
+            Sensor access
+          </button>
+          {sensorNote && <p className="muted-copy">{sensorNote}</p>}
+        </section>
+      </section>
+    </main>
   );
 }
 
@@ -523,28 +529,39 @@ function appendHistory(current: History, snapshot: TelemetrySnapshot): History {
   return next;
 }
 
-function buildPath(points: HistoryPoint[]) {
+function buildPath(points: HistoryPoint[], now: number, domain: { min: number; max: number }) {
   if (points.length < 2) {
     return "";
   }
 
-  const width = 240;
-  const height = 64;
-  const minTime = points[0].timestamp;
-  const maxTime = points[points.length - 1].timestamp;
-  const values = points.map((point) => point.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  const valueSpan = Math.max(maxValue - minValue, 1);
-  const timeSpan = Math.max(maxTime - minTime, 1);
+  const plot = {
+    x: 38,
+    y: 12,
+    width: 208,
+    height: 56,
+  };
+  const minTime = now - HISTORY_MS;
+  const valueSpan = Math.max(domain.max - domain.min, 1);
 
   return points
+    .filter((point) => point.timestamp >= minTime)
     .map((point, index) => {
-      const x = ((point.timestamp - minTime) / timeSpan) * width;
-      const y = height - ((point.value - minValue) / valueSpan) * (height - 10) - 5;
+      const x = plot.x + ((point.timestamp - minTime) / HISTORY_MS) * plot.width;
+      const clampedValue = Math.min(Math.max(point.value, domain.min), domain.max);
+      const y = plot.y + plot.height - ((clampedValue - domain.min) / valueSpan) * plot.height;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
+}
+
+function getChartDomain(metric: MetricDefinition, points: HistoryPoint[]) {
+  if (metric.unit === "%") {
+    return { min: 0, max: 100 };
+  }
+
+  const maxPoint = Math.max(0, ...points.map((point) => point.value));
+  const max = maxPoint > 0 ? maxPoint * 1.15 : 1;
+  return { min: 0, max };
 }
 
 function formatSample(sample: MetricSample, metric: MetricDefinition) {
@@ -559,6 +576,18 @@ function formatSample(sample: MetricSample, metric: MetricDefinition) {
   return `${sample.value.toFixed(metric.precision)} ${sample.unit}`;
 }
 
+function formatAxisValue(value: number, metric: MetricDefinition) {
+  if (metric.unit === "B/s") {
+    return formatBytes(value) + "/s";
+  }
+
+  if (metric.unit === "%") {
+    return `${Math.round(value)}%`;
+  }
+
+  return `${value.toFixed(metric.precision === 0 ? 0 : 1)} ${metric.unit}`;
+}
+
 function formatBytes(value: number) {
   const units = ["B", "KB", "MB", "GB"];
   let scaled = value;
@@ -570,14 +599,6 @@ function formatBytes(value: number) {
   }
 
   return `${scaled.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-}
-
-function formatTime(timestamp: number) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(timestamp);
 }
 
 export default App;

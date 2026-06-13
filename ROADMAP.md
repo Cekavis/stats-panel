@@ -29,7 +29,7 @@ Status: complete
 
 Status: complete
 
-- Borderless compact UI with draggable titlebar.
+- Borderless compact display panel with drag-region support.
 - Always-on-top toggle.
 - Window geometry persistence.
 - Tray menu for restoring or quitting the app.
@@ -41,4 +41,3 @@ Status: in progress
 - Production build validation.
 - Tauri bundle validation.
 - Release notes and known sensor limitations.
-

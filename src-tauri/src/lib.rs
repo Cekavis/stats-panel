@@ -8,7 +8,7 @@ use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, Telemetr
 use std::{sync::Mutex, thread, time::Duration};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
-    LogicalSize, Manager, State, WindowEvent,
+    LogicalSize, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 struct AppState {
@@ -129,6 +129,7 @@ fn setup_window_events(app: &mut App) {
 fn setup_tray(app: &mut App) -> tauri::Result<()> {
     let menu = MenuBuilder::new(app)
         .text("show", "Show Stats Panel")
+        .text("settings", "Settings")
         .text("quit", "Quit")
         .build()?;
 
@@ -143,6 +144,9 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
                     let _ = window.set_focus();
                 }
             }
+            "settings" => {
+                let _ = show_settings_window(app);
+            }
             "quit" => {
                 save_window_geometry(app);
                 app.exit(0);
@@ -155,6 +159,40 @@ fn setup_tray(app: &mut App) -> tauri::Result<()> {
     }
 
     builder.build(app)?;
+    Ok(())
+}
+
+fn show_settings_window(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(window) = app.get_webview_window("settings") {
+        window.show()?;
+        window.set_focus()?;
+        return Ok(());
+    }
+
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "settings");
+
+    if let Some(config) = config {
+        WebviewWindowBuilder::from_config(app, config)?.build()?;
+    } else {
+        WebviewWindowBuilder::new(
+            app,
+            "settings",
+            WebviewUrl::App("index.html?view=settings".into()),
+        )
+        .title("Stats Panel Settings")
+        .inner_size(520.0, 720.0)
+        .min_inner_size(420.0, 480.0)
+        .resizable(true)
+        .decorations(true)
+        .center()
+        .build()?;
+    }
+
     Ok(())
 }
 
