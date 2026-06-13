@@ -1,8 +1,8 @@
 use crate::metrics::{
     now_ms, ok_sample, unavailable_sample, MetricSample, ProviderStatus, TelemetrySnapshot,
 };
-use nvml_wrapper::enum_wrappers::device::{Clock, TemperatureSensor};
-use nvml_wrapper::Nvml;
+use nvml_wrapper::enum_wrappers::device::{Clock, ClockId, TemperatureSensor};
+use nvml_wrapper::{Device, Nvml};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
 use sysinfo::{Disks, Networks, System};
@@ -81,7 +81,12 @@ impl TelemetryCollector {
             timestamp,
         ));
 
-        let average_frequency = average_cpu_frequency(&self.system);
+        let average_frequency = self
+            .hardware_monitor
+            .read()
+            .ok()
+            .and_then(|reading| reading.cpu_frequency)
+            .unwrap_or_else(|| average_cpu_frequency(&self.system));
         samples.push(ok_sample(
             "cpu.frequency",
             average_frequency,
@@ -206,14 +211,14 @@ impl TelemetryCollector {
             "gpu.core_clock",
             "MHz",
             timestamp,
-            device.clock_info(Clock::Graphics).map(|value| value as f64),
+            nvml_clock_value(&device, Clock::Graphics),
         );
         push_nvml_metric(
             samples,
             "gpu.memory_clock",
             "MHz",
             timestamp,
-            device.clock_info(Clock::Memory).map(|value| value as f64),
+            nvml_clock_value(&device, Clock::Memory),
         );
         push_nvml_metric(
             samples,
@@ -299,6 +304,34 @@ impl TelemetryCollector {
                     reading.cpu_power,
                     "CPU power sensor not found.",
                 );
+                push_helper_sensor_if_available(
+                    samples,
+                    "gpu.core_clock",
+                    "MHz",
+                    timestamp,
+                    reading.gpu_core_clock,
+                );
+                push_helper_sensor_if_available(
+                    samples,
+                    "gpu.memory_clock",
+                    "MHz",
+                    timestamp,
+                    reading.gpu_memory_clock,
+                );
+                push_helper_sensor_if_available(
+                    samples,
+                    "gpu.temperature",
+                    "℃",
+                    timestamp,
+                    reading.gpu_temperature,
+                );
+                push_helper_sensor_if_available(
+                    samples,
+                    "gpu.power",
+                    "W",
+                    timestamp,
+                    reading.gpu_power,
+                );
             }
             Err(message) => {
                 statuses.push(provider_status(
@@ -341,8 +374,13 @@ struct HardwareMonitorState {
 
 #[derive(Clone, Debug, Default)]
 struct HardwareReading {
+    cpu_frequency: Option<f64>,
     cpu_temperature: Option<f64>,
     cpu_power: Option<f64>,
+    gpu_core_clock: Option<f64>,
+    gpu_memory_clock: Option<f64>,
+    gpu_temperature: Option<f64>,
+    gpu_power: Option<f64>,
     message: String,
 }
 
@@ -350,8 +388,13 @@ struct HardwareReading {
 #[serde(rename_all = "camelCase")]
 struct HelperReading {
     available: bool,
+    cpu_frequency: Option<f64>,
     cpu_temperature: Option<f64>,
     cpu_power: Option<f64>,
+    gpu_core_clock: Option<f64>,
+    gpu_memory_clock: Option<f64>,
+    gpu_temperature: Option<f64>,
+    gpu_power: Option<f64>,
     message: String,
 }
 
@@ -392,8 +435,13 @@ impl HardwareMonitorProvider {
         state.available = reading.available;
         state.message = reading.message.clone();
         state.reading = HardwareReading {
+            cpu_frequency: reading.cpu_frequency,
             cpu_temperature: reading.cpu_temperature,
             cpu_power: reading.cpu_power,
+            gpu_core_clock: reading.gpu_core_clock,
+            gpu_memory_clock: reading.gpu_memory_clock,
+            gpu_temperature: reading.gpu_temperature,
+            gpu_power: reading.gpu_power,
             message: reading.message,
         };
     }
@@ -538,6 +586,17 @@ fn push_nvml_metric(
     }
 }
 
+fn nvml_clock_value(
+    device: &Device,
+    clock: Clock,
+) -> Result<f64, nvml_wrapper::error::NvmlError> {
+    device
+        .clock(clock, ClockId::Current)
+        .or_else(|_| device.clock_info(clock))
+        .or_else(|_| device.max_clock_info(clock))
+        .map(|value| value as f64)
+}
+
 fn push_optional_sensor(
     samples: &mut Vec<MetricSample>,
     id: &str,
@@ -561,6 +620,24 @@ fn push_optional_sensor(
             timestamp,
             fallback_message,
         )),
+    }
+}
+
+fn push_helper_sensor_if_available(
+    samples: &mut Vec<MetricSample>,
+    id: &str,
+    unit: &str,
+    timestamp: u64,
+    value: Option<f64>,
+) {
+    if let Some(value) = value {
+        samples.push(ok_sample(
+            id,
+            value,
+            unit,
+            "Bundled Sensor Helper",
+            timestamp,
+        ));
     }
 }
 
@@ -644,13 +721,18 @@ mod tests {
     #[test]
     fn helper_reading_parses_camel_case_json() {
         let reading = parse_helper_reading(
-            r#"{"available":true,"cpuTemperature":61.5,"cpuPower":44.25,"message":"online","timestamp":1}"#,
+            r#"{"available":true,"cpuFrequency":4288.5,"cpuTemperature":61.5,"cpuPower":44.25,"gpuCoreClock":2415.0,"gpuMemoryClock":10501.0,"gpuTemperature":55.0,"gpuPower":128.5,"message":"online","timestamp":1}"#,
         )
         .expect("helper JSON should parse");
 
         assert!(reading.available);
+        assert_eq!(reading.cpu_frequency, Some(4288.5));
         assert_eq!(reading.cpu_temperature, Some(61.5));
         assert_eq!(reading.cpu_power, Some(44.25));
+        assert_eq!(reading.gpu_core_clock, Some(2415.0));
+        assert_eq!(reading.gpu_memory_clock, Some(10501.0));
+        assert_eq!(reading.gpu_temperature, Some(55.0));
+        assert_eq!(reading.gpu_power, Some(128.5));
         assert_eq!(reading.message, "online");
     }
 

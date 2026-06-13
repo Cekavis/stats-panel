@@ -56,6 +56,8 @@ const DASHBOARD_GROUPS: MetricGroup[] = [
     title: "GPU / VRAM",
     metricIds: [
       "gpu.usage",
+      "gpu.core_clock",
+      "gpu.memory_clock",
       "gpu.temperature",
       "gpu.power",
       "gpu.memory_usage",
@@ -304,13 +306,14 @@ function DashboardView({
             <div className="metric-list" data-tauri-drag-region>
               {group.metricIds
                 .filter((id) => {
-                  if (id === "memory.usage") {
-                    return visible.has("memory.usage") || visible.has("memory.used");
+                  const pairedId = pairedMetricId(id);
+                  if (pairedId) {
+                    return visible.has(id) || visible.has(pairedId);
                   }
                   return visible.has(id);
                 })
                 .map((id) => {
-                  if (id === "memory.used") {
+                  if (id === "memory.used" || id === "gpu.memory_used") {
                     return null;
                   }
 
@@ -321,15 +324,32 @@ function DashboardView({
 
                   if (id === "memory.usage") {
                     return (
-                      <MemoryMetricRow
+                      <CombinedMetricRow
                         key={metric.id}
                         chartMetric={metric}
+                        label="Memory"
                         now={now}
                         points={history[metric.id] ?? []}
                         showChart={charted.has(metric.id)}
                         usageSample={sampleById.get("memory.usage")}
                         usedMetric={metricById.get("memory.used")}
                         usedSample={sampleById.get("memory.used")}
+                      />
+                    );
+                  }
+
+                  if (id === "gpu.memory_usage") {
+                    return (
+                      <CombinedMetricRow
+                        key={metric.id}
+                        chartMetric={metric}
+                        label="VRAM"
+                        now={now}
+                        points={history[metric.id] ?? []}
+                        showChart={charted.has(metric.id)}
+                        usageSample={sampleById.get("gpu.memory_usage")}
+                        usedMetric={metricById.get("gpu.memory_used")}
+                        usedSample={sampleById.get("gpu.memory_used")}
                       />
                     );
                   }
@@ -353,8 +373,9 @@ function DashboardView({
   );
 }
 
-function MemoryMetricRow({
+function CombinedMetricRow({
   chartMetric,
+  label,
   now,
   points,
   showChart,
@@ -363,6 +384,7 @@ function MemoryMetricRow({
   usedSample,
 }: {
   chartMetric: MetricDefinition;
+  label: string;
   now: number;
   points: HistoryPoint[];
   showChart: boolean;
@@ -371,10 +393,10 @@ function MemoryMetricRow({
   usedSample: MetricSample | undefined;
 }) {
   return (
-    <article className="metric-row metric-row-memory" data-tauri-drag-region>
+    <article className={`metric-row metric-row-${chartMetric.category}`} data-tauri-drag-region>
       <div className="metric-value" data-tauri-drag-region>
-        <span data-tauri-drag-region>Memory</span>
-        <div className="memory-values" data-tauri-drag-region>
+        <span data-tauri-drag-region>{label}</span>
+        <div className="paired-values" data-tauri-drag-region>
           <strong className={usageSample?.status === "ok" ? "" : "is-muted"} data-tauri-drag-region>
             {usageSample ? formatSample(usageSample, chartMetric) : "--"}
           </strong>
@@ -386,6 +408,18 @@ function MemoryMetricRow({
       <AxisChart metric={chartMetric} now={now} points={showChart ? points : []} />
     </article>
   );
+}
+
+function pairedMetricId(id: string) {
+  if (id === "memory.usage") {
+    return "memory.used";
+  }
+
+  if (id === "gpu.memory_usage") {
+    return "gpu.memory_used";
+  }
+
+  return "";
 }
 
 function MetricRow({
