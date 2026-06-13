@@ -625,9 +625,18 @@ function SettingsView({
 function appendHistory(current: History, snapshot: TelemetrySnapshot): History {
   const next: History = { ...current };
   const minTimestamp = snapshot.timestamp - HISTORY_MS;
+  const latestSamples = new Map<string, MetricSample>();
 
   for (const sample of snapshot.samples) {
     if (sample.status !== "ok" || sample.value === null) {
+      continue;
+    }
+
+    latestSamples.set(sample.id, sample);
+  }
+
+  for (const sample of latestSamples.values()) {
+    if (sample.value === null) {
       continue;
     }
 

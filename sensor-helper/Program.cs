@@ -6,6 +6,7 @@ using LibreHardwareMonitor.Hardware;
 
 var intervalMs = ParseInterval(args);
 var parentPid = ParseParentPid(args);
+var dumpSensors = args.Any(arg => string.Equals(arg, "--dump-sensors", StringComparison.OrdinalIgnoreCase));
 var computer = new Computer
 {
     IsCpuEnabled = true,
@@ -28,6 +29,12 @@ catch (Exception error)
 try
 {
     var once = args.Any(arg => string.Equals(arg, "--once", StringComparison.OrdinalIgnoreCase));
+    if (dumpSensors)
+    {
+        computer.Accept(new UpdateVisitor());
+        DumpSensors(computer.Hardware);
+        return;
+    }
 
     do
     {
@@ -107,7 +114,7 @@ static bool ParentProcessExited(int? parentPid)
 static SensorReading ReadSensors(Computer computer)
 {
     var sensors = EnumerateCpuSensors(computer.Hardware).ToList();
-    var gpuSensors = EnumerateGpuSensors(computer.Hardware).ToList();
+    var gpuSensors = SelectPrimaryGpuSensors(computer.Hardware);
     var cpuFrequency = sensors
         .Where(sensor => sensor.SensorType == SensorType.Clock && sensor.Value.HasValue)
         .Where(sensor => sensor.Value!.Value > 0)
@@ -216,23 +223,59 @@ static IEnumerable<ISensor> EnumerateCpuSensors(IEnumerable<IHardware> hardwareI
     }
 }
 
-static IEnumerable<ISensor> EnumerateGpuSensors(IEnumerable<IHardware> hardwareItems)
+static List<ISensor> SelectPrimaryGpuSensors(IEnumerable<IHardware> hardwareItems)
+{
+    return EnumerateGpuHardware(hardwareItems)
+        .Select(hardware => new
+        {
+            Sensors = hardware.Sensors.ToList(),
+            Score = ScoreGpuHardware(hardware),
+        })
+        .OrderByDescending(candidate => candidate.Score)
+        .Select(candidate => candidate.Sensors)
+        .FirstOrDefault() ?? [];
+}
+
+static IEnumerable<IHardware> EnumerateGpuHardware(IEnumerable<IHardware> hardwareItems)
 {
     foreach (var hardware in hardwareItems)
     {
         if (hardware.HardwareType is HardwareType.GpuAmd or HardwareType.GpuIntel or HardwareType.GpuNvidia
             || ContainsAny(hardware.Name, "GPU", "NVIDIA", "AMD Radeon", "Intel Graphics"))
         {
-            foreach (var sensor in hardware.Sensors)
-            {
-                yield return sensor;
-            }
+            yield return hardware;
         }
 
-        foreach (var sensor in EnumerateGpuSensors(hardware.SubHardware))
+        foreach (var gpuHardware in EnumerateGpuHardware(hardware.SubHardware))
         {
-            yield return sensor;
+            yield return gpuHardware;
         }
+    }
+}
+
+static double ScoreGpuHardware(IHardware hardware)
+{
+    var score = hardware.HardwareType == HardwareType.GpuNvidia ? 10_000.0 : 0.0;
+    score += hardware.Sensors
+        .Where(sensor => sensor.SensorType == SensorType.SmallData && ContainsAny(sensor.Name, "Memory Used"))
+        .Select(sensor => (double?)sensor.Value.GetValueOrDefault())
+        .DefaultIfEmpty(null)
+        .Max() ?? 0.0;
+
+    return score;
+}
+
+static void DumpSensors(IEnumerable<IHardware> hardwareItems, string indent = "")
+{
+    foreach (var hardware in hardwareItems)
+    {
+        Console.WriteLine($"{indent}{hardware.HardwareType}: {hardware.Name}");
+        foreach (var sensor in hardware.Sensors)
+        {
+            Console.WriteLine($"{indent}  {sensor.SensorType}: {sensor.Name} = {sensor.Value}");
+        }
+
+        DumpSensors(hardware.SubHardware, indent + "  ");
     }
 }
 
@@ -290,16 +333,13 @@ static double? ReadCpuFrequencyFromWindowsPerformanceCounters()
             .Where(counter => !string.Equals(Convert.ToString(counter["Name"]), "_Total", StringComparison.OrdinalIgnoreCase))
             .Select(counter =>
             {
-                var frequency = TryReadDouble(counter["ProcessorFrequency"]);
-                if (frequency.HasValue)
+                var percentPerformance = TryReadDouble(counter["PercentProcessorPerformance"]);
+                if (percentPerformance.HasValue && maxClockSpeed.HasValue)
                 {
-                    return frequency;
+                    return maxClockSpeed.Value * percentPerformance.Value / 100.0;
                 }
 
-                var percentPerformance = TryReadDouble(counter["PercentProcessorPerformance"]);
-                return percentPerformance.HasValue && maxClockSpeed.HasValue
-                    ? maxClockSpeed.Value * percentPerformance.Value / 100.0
-                    : null;
+                return TryReadDouble(counter["ProcessorFrequency"]);
             })
             .Where(value => value.HasValue && value.Value > 0)
             .Select(value => value!.Value)

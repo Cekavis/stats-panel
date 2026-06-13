@@ -631,13 +631,18 @@ fn push_helper_sensor_if_available(
     value: Option<f64>,
 ) {
     if let Some(value) = value {
-        samples.push(ok_sample(
-            id,
-            value,
-            unit,
-            "Bundled Sensor Helper",
-            timestamp,
-        ));
+        upsert_sample(
+            samples,
+            ok_sample(id, value, unit, "Bundled Sensor Helper", timestamp),
+        );
+    }
+}
+
+fn upsert_sample(samples: &mut Vec<MetricSample>, sample: MetricSample) {
+    if let Some(existing) = samples.iter_mut().find(|existing| existing.id == sample.id) {
+        *existing = sample;
+    } else {
+        samples.push(sample);
     }
 }
 
