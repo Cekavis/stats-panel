@@ -222,7 +222,7 @@ impl TelemetryCollector {
         push_nvml_metric(
             samples,
             "gpu.temperature",
-            "C",
+            "℃",
             timestamp,
             device
                 .temperature(TemperatureSensor::Gpu)
@@ -283,7 +283,7 @@ impl TelemetryCollector {
                 push_optional_sensor(
                     samples,
                     "cpu.temperature",
-                    "C",
+                    "℃",
                     timestamp,
                     reading.cpu_temperature,
                     "CPU temperature sensor not found.",
@@ -306,7 +306,7 @@ impl TelemetryCollector {
                 ));
                 samples.push(unavailable_sample(
                     "cpu.temperature",
-                    "C",
+                    "℃",
                     "Bundled Sensor Helper",
                     timestamp,
                     message.clone(),
@@ -534,7 +534,7 @@ fn push_unavailable_gpu(samples: &mut Vec<MetricSample>, timestamp: u64, message
         ("gpu.core_clock", "MHz"),
         ("gpu.memory_clock", "MHz"),
         ("gpu.power", "W"),
-        ("gpu.temperature", "C"),
+        ("gpu.temperature", "℃"),
         ("gpu.memory_used", "GB"),
         ("gpu.memory_usage", "%"),
     ] {

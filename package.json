@@ -1,7 +1,7 @@
 {
   "name": "stats-panel",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "build:helper": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sensor-helper.ps1",

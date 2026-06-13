@@ -124,6 +124,22 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+
+    async function bind() {
+      unlisten = await listen<UserPreferences>("preferences-updated", (event) => {
+        setPreferences(event.payload);
+      });
+    }
+
+    bind().catch((nextError) => setError(String(nextError)));
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
   const metricById = useMemo(
     () => new Map(manifest.map((metric) => [metric.id, metric])),
     [manifest],
@@ -287,12 +303,37 @@ function DashboardView({
             <h2 data-tauri-drag-region>{group.title}</h2>
             <div className="metric-list" data-tauri-drag-region>
               {group.metricIds
-                .filter((id) => visible.has(id))
+                .filter((id) => {
+                  if (id === "memory.usage") {
+                    return visible.has("memory.usage") || visible.has("memory.used");
+                  }
+                  return visible.has(id);
+                })
                 .map((id) => {
+                  if (id === "memory.used") {
+                    return null;
+                  }
+
                   const metric = metricById.get(id);
                   if (!metric) {
                     return null;
                   }
+
+                  if (id === "memory.usage") {
+                    return (
+                      <MemoryMetricRow
+                        key={metric.id}
+                        chartMetric={metric}
+                        now={now}
+                        points={history[metric.id] ?? []}
+                        showChart={charted.has(metric.id)}
+                        usageSample={sampleById.get("memory.usage")}
+                        usedMetric={metricById.get("memory.used")}
+                        usedSample={sampleById.get("memory.used")}
+                      />
+                    );
+                  }
+
                   return (
                     <MetricRow
                       key={metric.id}
@@ -312,6 +353,41 @@ function DashboardView({
   );
 }
 
+function MemoryMetricRow({
+  chartMetric,
+  now,
+  points,
+  showChart,
+  usageSample,
+  usedMetric,
+  usedSample,
+}: {
+  chartMetric: MetricDefinition;
+  now: number;
+  points: HistoryPoint[];
+  showChart: boolean;
+  usageSample: MetricSample | undefined;
+  usedMetric: MetricDefinition | undefined;
+  usedSample: MetricSample | undefined;
+}) {
+  return (
+    <article className="metric-row metric-row-memory" data-tauri-drag-region>
+      <div className="metric-value" data-tauri-drag-region>
+        <span data-tauri-drag-region>Memory</span>
+        <div className="memory-values" data-tauri-drag-region>
+          <strong className={usageSample?.status === "ok" ? "" : "is-muted"} data-tauri-drag-region>
+            {usageSample ? formatSample(usageSample, chartMetric) : "--"}
+          </strong>
+          <em className={usedSample?.status === "ok" ? "" : "is-muted"} data-tauri-drag-region>
+            {usedSample && usedMetric ? formatSample(usedSample, usedMetric) : "--"}
+          </em>
+        </div>
+      </div>
+      <AxisChart metric={chartMetric} now={now} points={showChart ? points : []} />
+    </article>
+  );
+}
+
 function MetricRow({
   metric,
   now,
@@ -326,10 +402,10 @@ function MetricRow({
   showChart: boolean;
 }) {
   return (
-    <article className="metric-row">
-      <div className="metric-value">
-        <span>{metric.label}</span>
-        <strong className={sample?.status === "ok" ? "" : "is-muted"}>
+    <article className={`metric-row metric-row-${metric.category}`} data-tauri-drag-region>
+      <div className="metric-value" data-tauri-drag-region>
+        <span data-tauri-drag-region>{metric.label}</span>
+        <strong className={sample?.status === "ok" ? "" : "is-muted"} data-tauri-drag-region>
           {sample ? formatSample(sample, metric) : "--"}
         </strong>
       </div>
@@ -573,7 +649,8 @@ function formatSample(sample: MetricSample, metric: MetricDefinition) {
     return formatBytes(sample.value) + "/s";
   }
 
-  return `${sample.value.toFixed(metric.precision)} ${sample.unit}`;
+  const precision = metric.id === "gpu.usage" ? 0 : metric.precision;
+  return `${sample.value.toFixed(precision)} ${formatUnit(sample.unit)}`;
 }
 
 function formatAxisValue(value: number, metric: MetricDefinition) {
@@ -585,7 +662,7 @@ function formatAxisValue(value: number, metric: MetricDefinition) {
     return `${Math.round(value)}%`;
   }
 
-  return `${value.toFixed(metric.precision === 0 ? 0 : 1)} ${metric.unit}`;
+  return `${value.toFixed(metric.precision === 0 ? 0 : 1)} ${formatUnit(metric.unit)}`;
 }
 
 function formatBytes(value: number) {
@@ -599,6 +676,10 @@ function formatBytes(value: number) {
   }
 
   return `${scaled.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
+function formatUnit(unit: string) {
+  return unit === "C" ? "℃" : unit;
 }
 
 export default App;

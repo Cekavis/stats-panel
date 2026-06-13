@@ -65,8 +65,8 @@ impl Default for UserPreferences {
 impl Default for WindowPreferences {
     fn default() -> Self {
         Self {
-            width: 420.0,
-            height: 720.0,
+            width: 1280.0,
+            height: 2160.0,
             x: None,
             y: None,
             always_on_top: false,
@@ -117,7 +117,7 @@ mod tests {
             .visible_metric_ids
             .contains(&"gpu.usage".to_string()));
         assert_eq!(preferences.sample_interval_ms, 1_000);
-        assert_eq!(preferences.window.width, 420.0);
+        assert_eq!(preferences.window.width, 1280.0);
     }
 
     #[test]

@@ -101,7 +101,7 @@ button {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(88px, 0.84fr) minmax(142px, 1.35fr);
+  grid-template-columns: minmax(132px, 0.95fr) minmax(156px, 1.35fr);
   align-items: center;
   gap: clamp(6px, 0.9vw, 14px);
   overflow: hidden;
@@ -134,17 +134,44 @@ button {
 .metric-value strong {
   display: block;
   min-width: 0;
-  overflow: hidden;
   color: #ffffff;
-  font-size: clamp(0.95rem, 2.3vw, 2.25rem);
+  font-size: clamp(1rem, 1.75vw, 2rem);
   font-weight: 750;
   line-height: 1.02;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .metric-value strong.is-muted {
   color: #637078;
+}
+
+.memory-values {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+
+.memory-values em {
+  min-width: 0;
+  overflow: hidden;
+  color: #eabc50;
+  font-size: clamp(0.68rem, 0.8vw, 0.88rem);
+  font-style: normal;
+  font-weight: 750;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-values em.is-muted {
+  color: #637078;
+}
+
+.metric-row-disk .metric-value strong,
+.metric-row-network .metric-value strong {
+  font-size: clamp(0.92rem, 1.48vw, 1.72rem);
 }
 
 .axis-chart {
@@ -474,7 +501,7 @@ button {
   }
 
   .metric-row {
-    grid-template-columns: minmax(92px, 0.72fr) minmax(150px, 1.3fr);
+    grid-template-columns: minmax(132px, 0.72fr) minmax(150px, 1.3fr);
   }
 }
 

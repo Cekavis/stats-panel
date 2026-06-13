@@ -35,14 +35,28 @@ fn save_preferences(
     state: State<'_, AppState>,
     preferences: UserPreferences,
 ) -> Result<UserPreferences, String> {
-    let preferences = sanitize_preferences(preferences);
-    apply_window_preferences(&app, &preferences.window)?;
+    save_window_geometry(&app);
+
+    let mut preferences = sanitize_preferences(preferences);
+    let current_window = state
+        .preferences
+        .lock()
+        .map_err(|error| error.to_string())?
+        .window
+        .clone();
+    preferences.window.width = current_window.width;
+    preferences.window.height = current_window.height;
+    preferences.window.x = current_window.x;
+    preferences.window.y = current_window.y;
+
+    apply_window_options(&app, &preferences.window)?;
     save_preferences_to_disk(&app, &preferences)?;
 
     *state
         .preferences
         .lock()
         .map_err(|error| error.to_string())? = preferences.clone();
+    let _ = app.emit("preferences-updated", preferences.clone());
     Ok(preferences)
 }
 
@@ -65,6 +79,7 @@ fn set_window_preferences(
         .preferences
         .lock()
         .map_err(|error| error.to_string())? = preferences.clone();
+    let _ = app.emit("preferences-updated", preferences.clone());
     Ok(preferences.window)
 }
 
@@ -245,6 +260,18 @@ fn apply_window_preferences(
     Ok(())
 }
 
+fn apply_window_options(app: &AppHandle, preferences: &WindowPreferences) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Ok(());
+    };
+
+    window
+        .set_always_on_top(preferences.always_on_top)
+        .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
 fn save_window_geometry(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -280,7 +307,7 @@ fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
 }
 
 fn sanitize_window_preferences(mut window: WindowPreferences) -> WindowPreferences {
-    window.width = window.width.clamp(320.0, 1_200.0);
-    window.height = window.height.clamp(420.0, 1_600.0);
+    window.width = window.width.clamp(320.0, 1_800.0);
+    window.height = window.height.clamp(420.0, 2_600.0);
     window
 }
