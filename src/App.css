@@ -158,6 +158,22 @@ button {
   background: rgba(8, 11, 13, 0.34);
 }
 
+.metric-row-main {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(132px, 0.95fr) minmax(156px, 1.35fr);
+  align-items: center;
+  gap: clamp(6px, 0.9vw, 14px);
+}
+
+.metric-row-cpu-usage {
+  grid-row: span 2;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) minmax(36px, 0.45fr);
+  align-items: stretch;
+}
+
 .is-compact .metric-row {
   padding: clamp(5px, 0.65vw, 9px);
 }
@@ -219,6 +235,43 @@ button {
 .metric-row-disk .metric-value strong,
 .metric-row-network .metric-value strong {
   font-size: clamp(0.92rem, 1.48vw, 1.72rem);
+}
+
+.cpu-core-bars {
+  min-width: 0;
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5px, 1fr));
+  align-items: end;
+  gap: clamp(3px, 0.35vw, 6px);
+  padding: 5px 6px;
+  overflow: hidden;
+  border: 1px solid rgba(91, 224, 206, 0.12);
+  border-radius: 6px;
+  background: rgba(91, 224, 206, 0.055);
+}
+
+.cpu-core-bars.is-empty {
+  opacity: 0.42;
+}
+
+.cpu-core-bar-slot {
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: end;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.cpu-core-bar {
+  width: 100%;
+  min-height: 2px;
+  display: block;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, #c7fff6 0%, #5be0ce 45%, #229f92 100%);
+  box-shadow: 0 0 10px rgba(91, 224, 206, 0.28);
 }
 
 .axis-chart {
@@ -574,6 +627,10 @@ button {
     grid-template-columns: minmax(132px, 0.72fr) minmax(150px, 1.3fr);
   }
 
+  .metric-row-main {
+    grid-template-columns: minmax(132px, 0.72fr) minmax(150px, 1.3fr);
+  }
+
   .sensor-driver-callout {
     left: 10px;
     right: 10px;
@@ -601,5 +658,14 @@ button {
 
   .axis-chart {
     min-height: 42px;
+  }
+
+  .metric-row-cpu-usage {
+    grid-template-rows: minmax(0, 1fr) minmax(28px, 0.42fr);
+  }
+
+  .cpu-core-bars {
+    min-height: 28px;
+    padding: 4px 5px;
   }
 }

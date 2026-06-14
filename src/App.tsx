@@ -34,6 +34,11 @@ type HistoryPoint = {
 
 type History = Record<string, HistoryPoint[]>;
 
+type CpuCoreUsage = {
+  index: number;
+  value: number;
+};
+
 type MetricGroup = {
   id: string;
   title: string;
@@ -320,6 +325,7 @@ function DashboardView({
   const charted = new Set(preferences.chartMetricIds);
   const now = Math.max(...Object.values(history).flat().map((point) => point.timestamp), Date.now());
   const needsSensorDriver = needsIntegratedSensorDriver(Array.from(sampleById.values()));
+  const cpuCoreUsages = getCpuCoreUsages(sampleById);
 
   return (
     <main
@@ -356,6 +362,20 @@ function DashboardView({
                   const metric = metricById.get(id);
                   if (!metric) {
                     return null;
+                  }
+
+                  if (id === "cpu.usage") {
+                    return (
+                      <CpuUsageMetricRow
+                        key={metric.id}
+                        coreUsages={cpuCoreUsages}
+                        metric={metric}
+                        now={now}
+                        points={history[metric.id] ?? []}
+                        sample={sampleById.get(metric.id)}
+                        showChart={charted.has(metric.id)}
+                      />
+                    );
                   }
 
                   if (id === "memory.usage") {
@@ -464,6 +484,57 @@ function needsIntegratedSensorDriver(samples: MetricSample[]) {
 
   return [cpuTemperature, cpuPower].some((sample) =>
     sample?.status === "unavailable" && sample.message?.includes("integrated sensor driver"),
+  );
+}
+
+function CpuUsageMetricRow({
+  coreUsages,
+  metric,
+  now,
+  points,
+  sample,
+  showChart,
+}: {
+  coreUsages: CpuCoreUsage[];
+  metric: MetricDefinition;
+  now: number;
+  points: HistoryPoint[];
+  sample: MetricSample | undefined;
+  showChart: boolean;
+}) {
+  return (
+    <article className="metric-row metric-row-cpu metric-row-cpu-usage" data-tauri-drag-region>
+      <div className="metric-row-main" data-tauri-drag-region>
+        <div className="metric-value" data-tauri-drag-region>
+          <span data-tauri-drag-region>{metric.label}</span>
+          <strong className={sample?.status === "ok" ? "" : "is-muted"} data-tauri-drag-region>
+            {sample ? formatSample(sample, metric) : "--"}
+          </strong>
+        </div>
+        <AxisChart metric={metric} now={now} points={showChart ? points : []} />
+      </div>
+      <CpuCoreBars coreUsages={coreUsages} />
+    </article>
+  );
+}
+
+function CpuCoreBars({ coreUsages }: { coreUsages: CpuCoreUsage[] }) {
+  return (
+    <div
+      className={`cpu-core-bars ${coreUsages.length === 0 ? "is-empty" : ""}`}
+      aria-label="CPU per-core usage"
+      data-tauri-drag-region
+    >
+      {coreUsages.map((core) => (
+        <div className="cpu-core-bar-slot" key={core.index} title={`Core ${core.index + 1}: ${Math.round(core.value)}%`}>
+          <span
+            className="cpu-core-bar"
+            style={{ height: `${clampPercent(core.value)}%` }}
+            data-tauri-drag-region
+          />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -688,6 +759,25 @@ function SettingsView({
       </section>
     </main>
   );
+}
+
+function getCpuCoreUsages(sampleById: Map<string, MetricSample>): CpuCoreUsage[] {
+  const corePattern = /^cpu\.core\.(\d+)\.usage$/;
+
+  return Array.from(sampleById.values())
+    .flatMap((sample) => {
+      const match = corePattern.exec(sample.id);
+      if (!match || sample.status !== "ok" || sample.value === null) {
+        return [];
+      }
+
+      return [{ index: Number(match[1]), value: clampPercent(sample.value) }];
+    })
+    .sort((left, right) => left.index - right.index);
+}
+
+function clampPercent(value: number) {
+  return Math.min(Math.max(value, 0), 100);
 }
 
 function appendHistory(current: History, snapshot: TelemetrySnapshot): History {

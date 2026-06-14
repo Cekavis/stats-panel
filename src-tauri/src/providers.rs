@@ -80,6 +80,15 @@ impl TelemetryCollector {
             "sysinfo",
             timestamp,
         ));
+        for (index, cpu) in self.system.cpus().iter().enumerate() {
+            samples.push(ok_sample(
+                &format!("cpu.core.{index}.usage"),
+                cpu.cpu_usage() as f64,
+                "%",
+                "sysinfo",
+                timestamp,
+            ));
+        }
 
         let average_frequency = self
             .hardware_monitor

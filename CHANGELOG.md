@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added a Steam overlay-style per-core CPU usage bar row inside the CPU dashboard tile.
+- Bumped the app version to 0.2.19.
 - Restored drag support for the frameless main dashboard window by allowing Tauri window drag regions.
 - Bumped the app version to 0.2.18.
 - Fixed CPU frequency readings so effective/idle core clocks no longer drag the displayed CPU clock far below the current hardware clock.
