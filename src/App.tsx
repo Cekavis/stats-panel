@@ -218,6 +218,13 @@ function App() {
     persist({ ...preferences, sampleIntervalMs });
   }
 
+  function updateStartup(launchAtStartup: boolean) {
+    if (!preferences) {
+      return;
+    }
+    persist({ ...preferences, launchAtStartup });
+  }
+
   function updateWindow<K extends keyof UserPreferences["window"]>(
     key: K,
     value: UserPreferences["window"][K],
@@ -287,6 +294,7 @@ function App() {
         onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
         onSensorHelp={showSensorHelp}
+        onStartupChange={updateStartup}
         onToggleChart={toggleChart}
         onToggleVisible={toggleVisible}
         onTopChange={(alwaysOnTop) => updateWindow("alwaysOnTop", alwaysOnTop)}
@@ -612,6 +620,7 @@ function SettingsView({
   onEnableSensorDriver,
   onIntervalChange,
   onSensorHelp,
+  onStartupChange,
   onToggleChart,
   onToggleVisible,
   onTopChange,
@@ -626,6 +635,7 @@ function SettingsView({
   onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
   onSensorHelp: () => void;
+  onStartupChange: (value: boolean) => void;
   onToggleChart: (id: string) => void;
   onToggleVisible: (id: string) => void;
   onTopChange: (value: boolean) => void;
@@ -678,6 +688,15 @@ function SettingsView({
               checked={preferences.window.alwaysOnTop}
               type="checkbox"
               onChange={(event) => onTopChange(event.currentTarget.checked)}
+            />
+          </label>
+
+          <label className="switch-row">
+            <span>Launch at Windows startup</span>
+            <input
+              checked={preferences.launchAtStartup}
+              type="checkbox"
+              onChange={(event) => onStartupChange(event.currentTarget.checked)}
             />
           </label>
         </section>

@@ -17,6 +17,7 @@ use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
     LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
+use tauri_plugin_autostart::ManagerExt;
 
 struct AppState {
     preferences: Mutex<UserPreferences>,
@@ -57,6 +58,7 @@ fn save_preferences(
     preferences.window.y = current_window.y;
 
     apply_window_options(&app, &preferences.window)?;
+    apply_startup_preference(&app, preferences.launch_at_startup)?;
     save_preferences_to_disk(&app, &preferences)?;
 
     *state
@@ -318,6 +320,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let app_handle = app.handle().clone();
             let preferences = sanitize_preferences(load_preferences(&app_handle));
@@ -327,6 +333,7 @@ pub fn run() {
             });
 
             apply_window_preferences(&app_handle, &preferences.window)?;
+            let _ = apply_startup_preference(&app_handle, preferences.launch_at_startup);
             setup_window_events(app);
             setup_tray(app)?;
             let hardware_monitor = start_hardware_monitor_helper(&app_handle);
@@ -507,6 +514,21 @@ fn apply_window_options(app: &AppHandle, preferences: &WindowPreferences) -> Res
     window
         .set_always_on_top(preferences.always_on_top)
         .map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+fn apply_startup_preference(app: &AppHandle, launch_at_startup: bool) -> Result<(), String> {
+    let autolaunch = app.autolaunch();
+    if launch_at_startup {
+        autolaunch
+            .enable()
+            .map_err(|error| format!("Could not enable launch at startup: {error}"))?;
+    } else {
+        autolaunch
+            .disable()
+            .map_err(|error| format!("Could not disable launch at startup: {error}"))?;
+    }
 
     Ok(())
 }

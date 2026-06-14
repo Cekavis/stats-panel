@@ -46,6 +46,7 @@ export type WindowPreferences = {
 
 export type UserPreferences = {
   metricSchemaVersion: number;
+  launchAtStartup: boolean;
   visibleMetricIds: string[];
   chartMetricIds: string[];
   sampleIntervalMs: number;

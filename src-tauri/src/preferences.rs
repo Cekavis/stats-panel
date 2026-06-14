@@ -7,6 +7,8 @@ use tauri::{AppHandle, Manager};
 pub struct UserPreferences {
     #[serde(default)]
     pub metric_schema_version: u32,
+    #[serde(default)]
+    pub launch_at_startup: bool,
     pub visible_metric_ids: Vec<String>,
     pub chart_metric_ids: Vec<String>,
     pub sample_interval_ms: u64,
@@ -28,6 +30,7 @@ impl Default for UserPreferences {
     fn default() -> Self {
         Self {
             metric_schema_version: 3,
+            launch_at_startup: false,
             visible_metric_ids: vec![
                 "cpu.usage",
                 "cpu.frequency",
@@ -131,6 +134,7 @@ mod tests {
             .visible_metric_ids
             .contains(&"disk.temperature".to_string()));
         assert_eq!(preferences.sample_interval_ms, 1_000);
+        assert!(!preferences.launch_at_startup);
         assert_eq!(preferences.window.width, 1280.0);
     }
 
@@ -143,6 +147,8 @@ mod tests {
 
         assert!(json.contains("visibleMetricIds"));
         assert!(json.contains("metricSchemaVersion"));
+        assert!(json.contains("launchAtStartup"));
         assert_eq!(parsed.chart_metric_ids, preferences.chart_metric_ids);
+        assert_eq!(parsed.launch_at_startup, preferences.launch_at_startup);
     }
 }
