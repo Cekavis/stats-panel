@@ -414,6 +414,12 @@ button {
   gap: 8px;
 }
 
+.sensor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .provider-row {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -459,6 +465,11 @@ button {
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.07);
   color: #eaf3f6;
+}
+
+.text-button:disabled {
+  cursor: wait;
+  opacity: 0.54;
 }
 
 .text-button:hover,

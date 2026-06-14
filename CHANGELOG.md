@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Integrated a bundled sensor-driver setup path for CPU temperature and power readings on hardware that requires low-level access.
+- Upgraded the bundled sensor helper to LibreHardwareMonitorLib 0.9.7-pre700.
+- Bumped the app version to 0.2.9.
 - Ignored disk sensor threshold readings such as critical or warning temperature when choosing the current disk temperature.
 - Bumped the app version to 0.2.8.
 - Added disk temperature monitoring through the bundled sensor helper, including default dashboard visibility and charting.

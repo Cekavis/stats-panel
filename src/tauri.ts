@@ -20,3 +20,7 @@ export function setWindowPreferences(window: WindowPreferences) {
 export function requestSensorPermissions() {
   return invoke<string>("request_sensor_permissions");
 }
+
+export function installIntegratedSensorDriver() {
+  return invoke<string>("install_integrated_sensor_driver");
+}

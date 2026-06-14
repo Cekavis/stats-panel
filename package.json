@@ -1,12 +1,13 @@
 {
   "name": "stats-panel",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.9",
   "type": "module",
   "scripts": {
+    "build:driver": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ensure-pawnio-installer.ps1",
     "build:helper": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sensor-helper.ps1",
     "dev": "vite",
-    "build": "npm run build:helper && tsc && vite build",
+    "build": "npm run build:driver && npm run build:helper && tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
   },

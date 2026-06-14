@@ -488,6 +488,12 @@ impl HardwareMonitorProvider {
         }
     }
 
+    pub fn restart(&self, app: &AppHandle) {
+        self.stop();
+        self.set_unavailable("Bundled sensor helper is restarting after sensor driver setup.");
+        launch_hardware_monitor_helper(app, self);
+    }
+
     fn store_child(&self, child: CommandChild) {
         let Ok(mut current) = self.child.lock() else {
             let _ = child.kill();
@@ -511,10 +517,15 @@ impl HardwareMonitorProvider {
 pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider {
     let provider = HardwareMonitorProvider::unavailable(SENSOR_HELPER_MESSAGE);
 
+    launch_hardware_monitor_helper(app, &provider);
+
+    provider
+}
+
+fn launch_hardware_monitor_helper(app: &AppHandle, provider: &HardwareMonitorProvider) {
     #[cfg(not(windows))]
     {
         provider.set_unavailable(SENSOR_HELPER_MESSAGE);
-        provider
     }
 
     #[cfg(windows)]
@@ -523,7 +534,7 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
             Ok(command) => command,
             Err(error) => {
                 provider.set_unavailable(format!("Bundled sensor helper is missing: {error}"));
-                return provider;
+                return;
             }
         }
         .args([format!("--parent-pid={}", std::process::id())]);
@@ -532,7 +543,7 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
             Ok(process) => process,
             Err(error) => {
                 provider.set_unavailable(format!("Bundled sensor helper could not start: {error}"));
-                return provider;
+                return;
             }
         };
         provider.store_child(child);
@@ -575,8 +586,6 @@ pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider
                 }
             }
         });
-
-        provider
     }
 }
 

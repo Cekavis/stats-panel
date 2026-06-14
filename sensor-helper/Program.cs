@@ -196,16 +196,20 @@ static SensorReading ReadSensors(Computer computer)
         ["Storage", "Disk", "Drive", "SSD", "HDD", "NVMe"],
         ["Temperature"]);
 
-    var message = cpuFrequency.HasValue
+    var hasAnySensor = cpuFrequency.HasValue
         || cpuTemperature.HasValue
         || cpuPower.HasValue
         || gpuCoreClock.HasValue
         || gpuMemoryClock.HasValue
         || gpuTemperature.HasValue
         || gpuPower.HasValue
-        || diskTemperature.HasValue
-        ? "Bundled sensor helper online."
-        : "CPU, GPU, and disk sensors were not found.";
+        || diskTemperature.HasValue;
+    var missingCpuHardwareSensors = !cpuTemperature.HasValue || !cpuPower.HasValue;
+    var message = hasAnySensor
+        ? missingCpuHardwareSensors
+            ? "Bundled sensor helper online. Enable the integrated sensor driver to unlock CPU temperature and power when this hardware requires low-level access."
+            : "Bundled sensor helper online."
+        : "CPU, GPU, and disk sensors were not found. Enable the integrated sensor driver if this hardware requires low-level access.";
 
     return new SensorReading(
         true,

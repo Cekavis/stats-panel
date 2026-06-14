@@ -11,6 +11,7 @@ import { listen } from "@tauri-apps/api/event";
 import {
   getMetricsManifest,
   getPreferences,
+  installIntegratedSensorDriver,
   requestSensorPermissions,
   savePreferences,
 } from "./tauri";
@@ -77,6 +78,7 @@ function App() {
   const [snapshot, setSnapshot] = useState<TelemetrySnapshot | null>(null);
   const [history, setHistory] = useState<History>({});
   const [sensorNote, setSensorNote] = useState("");
+  const [sensorDriverBusy, setSensorDriverBusy] = useState(false);
   const [error, setError] = useState("");
 
   const isSettingsView = new URLSearchParams(window.location.search).get("view") === "settings";
@@ -228,6 +230,18 @@ function App() {
     setSensorNote(await requestSensorPermissions());
   }
 
+  async function enableSensorDriver() {
+    setSensorDriverBusy(true);
+    setSensorNote("Starting the integrated sensor driver installer...");
+    try {
+      setSensorNote(await installIntegratedSensorDriver());
+    } catch (nextError) {
+      setSensorNote(String(nextError));
+    } finally {
+      setSensorDriverBusy(false);
+    }
+  }
+
   if (error) {
     return (
       <main className={isSettingsView ? "settings-shell is-error" : "dashboard-shell is-error"}>
@@ -258,8 +272,10 @@ function App() {
         manifest={manifest}
         preferences={preferences}
         providers={snapshot?.providers ?? []}
+        sensorDriverBusy={sensorDriverBusy}
         sensorNote={sensorNote}
         onCompactChange={(compact) => updateWindow("compact", compact)}
+        onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
         onSensorHelp={showSensorHelp}
         onToggleChart={toggleChart}
@@ -489,8 +505,10 @@ function SettingsView({
   manifest,
   preferences,
   providers,
+  sensorDriverBusy,
   sensorNote,
   onCompactChange,
+  onEnableSensorDriver,
   onIntervalChange,
   onSensorHelp,
   onToggleChart,
@@ -500,8 +518,10 @@ function SettingsView({
   manifest: MetricDefinition[];
   preferences: UserPreferences;
   providers: ProviderStatus[];
+  sensorDriverBusy: boolean;
   sensorNote: string;
   onCompactChange: (value: boolean) => void;
+  onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
   onSensorHelp: () => void;
   onToggleChart: (id: string) => void;
@@ -612,9 +632,19 @@ function SettingsView({
               ))
             )}
           </div>
-          <button className="text-button" type="button" onClick={onSensorHelp}>
-            Sensor access
-          </button>
+          <div className="sensor-actions">
+            <button className="text-button" type="button" onClick={onSensorHelp}>
+              Sensor access
+            </button>
+            <button
+              className="text-button"
+              disabled={sensorDriverBusy}
+              type="button"
+              onClick={onEnableSensorDriver}
+            >
+              {sensorDriverBusy ? "Opening installer..." : "Enable integrated sensor driver"}
+            </button>
+          </div>
           {sensorNote && <p className="muted-copy">{sensorNote}</p>}
         </section>
       </section>

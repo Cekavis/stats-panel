@@ -5,7 +5,13 @@ mod providers;
 use metrics::{metric_manifest, MetricDefinition};
 use preferences::{load_preferences, save_preferences_to_disk, UserPreferences, WindowPreferences};
 use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
-use std::{sync::Mutex, thread, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Mutex,
+    thread,
+    time::Duration,
+};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
     LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
@@ -85,7 +91,87 @@ fn set_window_preferences(
 
 #[tauri::command]
 fn request_sensor_permissions() -> String {
-    "CPU temperature, CPU power, GPU helper sensors, and disk temperature are collected by the bundled sensor helper. If sensors stay unavailable after approving administrator access, the hardware, driver, or firmware may not expose those readings.".to_string()
+    "Stats Panel can enable an integrated sensor driver to read CPU temperature and power on hardware that requires low-level access. If sensors stay unavailable after enabling it, the hardware, firmware, or current sensor library may not expose those readings.".to_string()
+}
+
+#[tauri::command]
+fn install_integrated_sensor_driver(
+    app: AppHandle,
+    hardware_monitor: State<'_, HardwareMonitorProvider>,
+) -> Result<String, String> {
+    install_integrated_sensor_driver_impl(&app)?;
+    hardware_monitor.restart(&app);
+
+    Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
+}
+
+#[cfg(windows)]
+fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<(), String> {
+    let installer = resolve_pawnio_installer(app)?;
+    let script = "$ErrorActionPreference = 'Stop'; $installer = $env:STATS_PAWNIO_INSTALLER; $process = Start-Process -FilePath $installer -Verb RunAs -Wait -PassThru; exit $process.ExitCode";
+    let status = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
+        .env("STATS_PAWNIO_INSTALLER", &installer)
+        .status()
+        .map_err(|error| {
+            format!("Could not start the integrated sensor driver installer: {error}")
+        })?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Integrated sensor driver installer exited with code {:?}.",
+            status.code()
+        ))
+    }
+}
+
+#[cfg(not(windows))]
+fn install_integrated_sensor_driver_impl(_app: &AppHandle) -> Result<(), String> {
+    Err("The integrated sensor driver is only available on Windows.".to_string())
+}
+
+fn resolve_pawnio_installer(app: &AppHandle) -> Result<PathBuf, String> {
+    const INSTALLER_NAME: &str = "PawnIO_setup.exe";
+    let mut candidates = Vec::new();
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        candidates.push(resource_dir.join(INSTALLER_NAME));
+        candidates.push(resource_dir.join("binaries").join(INSTALLER_NAME));
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            candidates.push(exe_dir.join(INSTALLER_NAME));
+            candidates.push(exe_dir.join("resources").join(INSTALLER_NAME));
+            candidates.push(
+                exe_dir
+                    .join("resources")
+                    .join("binaries")
+                    .join(INSTALLER_NAME),
+            );
+        }
+    }
+
+    candidates.push(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries")
+            .join(INSTALLER_NAME),
+    );
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_file())
+        .ok_or_else(|| {
+            "Integrated sensor driver installer is missing. Rebuild Stats Panel to include PawnIO_setup.exe.".to_string()
+        })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -115,7 +201,8 @@ pub fn run() {
             get_preferences,
             save_preferences,
             set_window_preferences,
-            request_sensor_permissions
+            request_sensor_permissions,
+            install_integrated_sensor_driver
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
