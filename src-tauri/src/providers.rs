@@ -294,7 +294,7 @@ impl TelemetryCollector {
                     "℃",
                     timestamp,
                     reading.cpu_temperature,
-                    "CPU temperature sensor not found.",
+                    "CPU temperature sensor not found. Enable the integrated sensor driver if this hardware requires low-level access.",
                 );
                 push_optional_sensor(
                     samples,
@@ -302,7 +302,7 @@ impl TelemetryCollector {
                     "W",
                     timestamp,
                     reading.cpu_power,
-                    "CPU power sensor not found.",
+                    "CPU power sensor not found. Enable the integrated sensor driver if this hardware requires low-level access.",
                 );
                 push_helper_sensor_if_available(
                     samples,

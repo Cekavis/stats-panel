@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added a dashboard-level prompt to enable the integrated sensor driver when CPU temperature or power is unavailable.
+- Bumped the app version to 0.2.10.
 - Integrated a bundled sensor-driver setup path for CPU temperature and power readings on hardware that requires low-level access.
 - Upgraded the bundled sensor helper to LibreHardwareMonitorLib 0.9.7-pre700.
 - Bumped the app version to 0.2.9.

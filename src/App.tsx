@@ -5,6 +5,7 @@ import {
   Check,
   Gauge,
   MonitorCog,
+  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
@@ -272,6 +273,7 @@ function App() {
         manifest={manifest}
         preferences={preferences}
         providers={snapshot?.providers ?? []}
+        samples={snapshot?.samples ?? []}
         sensorDriverBusy={sensorDriverBusy}
         sensorNote={sensorNote}
         onCompactChange={(compact) => updateWindow("compact", compact)}
@@ -289,8 +291,10 @@ function App() {
     <DashboardView
       history={history}
       metricById={metricById}
+      onEnableSensorDriver={enableSensorDriver}
       preferences={preferences}
       sampleById={sampleById}
+      sensorDriverBusy={sensorDriverBusy}
     />
   );
 }
@@ -298,23 +302,37 @@ function App() {
 function DashboardView({
   history,
   metricById,
+  onEnableSensorDriver,
   preferences,
   sampleById,
+  sensorDriverBusy,
 }: {
   history: History;
   metricById: Map<string, MetricDefinition>;
+  onEnableSensorDriver: () => void;
   preferences: UserPreferences;
   sampleById: Map<string, MetricSample>;
+  sensorDriverBusy: boolean;
 }) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
   const now = Math.max(...Object.values(history).flat().map((point) => point.timestamp), Date.now());
+  const needsSensorDriver = needsIntegratedSensorDriver(Array.from(sampleById.values()));
 
   return (
     <main
       className={`dashboard-shell ${preferences.window.compact ? "is-compact" : ""}`}
       data-tauri-drag-region
     >
+      {needsSensorDriver ? (
+        <section className="sensor-driver-callout">
+          <ShieldCheck size={17} />
+          <span>CPU temperature and power need the integrated sensor driver.</span>
+          <button disabled={sensorDriverBusy} type="button" onClick={onEnableSensorDriver}>
+            {sensorDriverBusy ? "Opening..." : "Enable"}
+          </button>
+        </section>
+      ) : null}
       <section className="dashboard-grid" aria-label="Stats dashboard" data-tauri-drag-region>
         {DASHBOARD_GROUPS.map((group) => (
           <section className="metric-group" key={group.id} data-tauri-drag-region>
@@ -438,6 +456,15 @@ function pairedMetricId(id: string) {
   return "";
 }
 
+function needsIntegratedSensorDriver(samples: MetricSample[]) {
+  const cpuTemperature = samples.find((sample) => sample.id === "cpu.temperature");
+  const cpuPower = samples.find((sample) => sample.id === "cpu.power");
+
+  return [cpuTemperature, cpuPower].some((sample) =>
+    sample?.status === "unavailable" && sample.message?.includes("integrated sensor driver"),
+  );
+}
+
 function MetricRow({
   metric,
   now,
@@ -505,6 +532,7 @@ function SettingsView({
   manifest,
   preferences,
   providers,
+  samples,
   sensorDriverBusy,
   sensorNote,
   onCompactChange,
@@ -518,6 +546,7 @@ function SettingsView({
   manifest: MetricDefinition[];
   preferences: UserPreferences;
   providers: ProviderStatus[];
+  samples: MetricSample[];
   sensorDriverBusy: boolean;
   sensorNote: string;
   onCompactChange: (value: boolean) => void;
@@ -530,6 +559,7 @@ function SettingsView({
 }) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
+  const needsSensorDriver = needsIntegratedSensorDriver(samples);
 
   return (
     <main className="settings-shell">
@@ -616,6 +646,12 @@ function SettingsView({
             <h2>Data Sources</h2>
           </div>
           <div className="provider-list">
+            {needsSensorDriver ? (
+              <div className="sensor-driver-notice">
+                <ShieldCheck size={16} />
+                <span>CPU temperature and power need the integrated sensor driver.</span>
+              </div>
+            ) : null}
             {providers.length === 0 ? (
               <p className="muted-copy">Waiting for telemetry providers...</p>
             ) : (
