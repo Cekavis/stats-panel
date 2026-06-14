@@ -27,12 +27,13 @@ pub struct WindowPreferences {
 impl Default for UserPreferences {
     fn default() -> Self {
         Self {
-            metric_schema_version: 2,
+            metric_schema_version: 3,
             visible_metric_ids: vec![
                 "cpu.usage",
                 "cpu.frequency",
                 "cpu.temperature",
                 "cpu.power",
+                "cpu.fan_speed",
                 "memory.usage",
                 "memory.used",
                 "gpu.usage",
@@ -40,6 +41,7 @@ impl Default for UserPreferences {
                 "gpu.memory_clock",
                 "gpu.temperature",
                 "gpu.power",
+                "gpu.fan_speed",
                 "gpu.memory_usage",
                 "gpu.memory_used",
                 "network.download",

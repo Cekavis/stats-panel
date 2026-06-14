@@ -304,6 +304,14 @@ impl TelemetryCollector {
                     reading.cpu_power,
                     &missing_cpu_sensor_message("CPU power", &reading.sensor_driver_state),
                 );
+                push_optional_sensor(
+                    samples,
+                    "cpu.fan_speed",
+                    "RPM",
+                    timestamp,
+                    reading.cpu_fan_speed,
+                    "CPU fan speed sensor not found.",
+                );
                 push_helper_sensor_if_available(
                     samples,
                     "gpu.core_clock",
@@ -334,6 +342,14 @@ impl TelemetryCollector {
                 );
                 push_optional_sensor(
                     samples,
+                    "gpu.fan_speed",
+                    "RPM",
+                    timestamp,
+                    reading.gpu_fan_speed,
+                    "GPU fan speed sensor not found.",
+                );
+                push_optional_sensor(
+                    samples,
                     "disk.temperature",
                     "℃",
                     timestamp,
@@ -358,6 +374,20 @@ impl TelemetryCollector {
                 samples.push(unavailable_sample(
                     "cpu.power",
                     "W",
+                    "Bundled Sensor Helper",
+                    timestamp,
+                    message.clone(),
+                ));
+                samples.push(unavailable_sample(
+                    "cpu.fan_speed",
+                    "RPM",
+                    "Bundled Sensor Helper",
+                    timestamp,
+                    message.clone(),
+                ));
+                samples.push(unavailable_sample(
+                    "gpu.fan_speed",
+                    "RPM",
                     "Bundled Sensor Helper",
                     timestamp,
                     message.clone(),
@@ -392,10 +422,12 @@ struct HardwareReading {
     cpu_frequency: Option<f64>,
     cpu_temperature: Option<f64>,
     cpu_power: Option<f64>,
+    cpu_fan_speed: Option<f64>,
     gpu_core_clock: Option<f64>,
     gpu_memory_clock: Option<f64>,
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
+    gpu_fan_speed: Option<f64>,
     disk_temperature: Option<f64>,
     sensor_driver_state: String,
     message: String,
@@ -408,10 +440,12 @@ struct HelperReading {
     cpu_frequency: Option<f64>,
     cpu_temperature: Option<f64>,
     cpu_power: Option<f64>,
+    cpu_fan_speed: Option<f64>,
     gpu_core_clock: Option<f64>,
     gpu_memory_clock: Option<f64>,
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
+    gpu_fan_speed: Option<f64>,
     disk_temperature: Option<f64>,
     #[serde(default)]
     sensor_driver_installed: bool,
@@ -460,10 +494,12 @@ impl HardwareMonitorProvider {
             cpu_frequency: reading.cpu_frequency,
             cpu_temperature: reading.cpu_temperature,
             cpu_power: reading.cpu_power,
+            cpu_fan_speed: reading.cpu_fan_speed,
             gpu_core_clock: reading.gpu_core_clock,
             gpu_memory_clock: reading.gpu_memory_clock,
             gpu_temperature: reading.gpu_temperature,
             gpu_power: reading.gpu_power,
+            gpu_fan_speed: reading.gpu_fan_speed,
             disk_temperature: reading.disk_temperature,
             sensor_driver_state: sensor_driver_state(&reading),
             message: reading.message,
@@ -782,7 +818,7 @@ mod tests {
     #[test]
     fn helper_reading_parses_camel_case_json() {
         let reading = parse_helper_reading(
-            r#"{"available":true,"cpuFrequency":4288.5,"cpuTemperature":61.5,"cpuPower":44.25,"gpuCoreClock":2415.0,"gpuMemoryClock":10501.0,"gpuTemperature":55.0,"gpuPower":128.5,"message":"online","timestamp":1}"#,
+            r#"{"available":true,"cpuFrequency":4288.5,"cpuTemperature":61.5,"cpuPower":44.25,"cpuFanSpeed":1857.0,"gpuCoreClock":2415.0,"gpuMemoryClock":10501.0,"gpuTemperature":55.0,"gpuPower":128.5,"gpuFanSpeed":1240.0,"message":"online","timestamp":1}"#,
         )
         .expect("helper JSON should parse");
 
@@ -790,10 +826,12 @@ mod tests {
         assert_eq!(reading.cpu_frequency, Some(4288.5));
         assert_eq!(reading.cpu_temperature, Some(61.5));
         assert_eq!(reading.cpu_power, Some(44.25));
+        assert_eq!(reading.cpu_fan_speed, Some(1857.0));
         assert_eq!(reading.gpu_core_clock, Some(2415.0));
         assert_eq!(reading.gpu_memory_clock, Some(10501.0));
         assert_eq!(reading.gpu_temperature, Some(55.0));
         assert_eq!(reading.gpu_power, Some(128.5));
+        assert_eq!(reading.gpu_fan_speed, Some(1240.0));
         assert_eq!(reading.disk_temperature, None);
         assert_eq!(reading.message, "online");
     }

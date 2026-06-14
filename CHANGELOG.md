@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added CPU and GPU fan speed metrics from the bundled sensor helper.
+- Preferred disk Composite Temperature readings while continuing to ignore disk warning and critical threshold sensors.
+- Bumped the app version to 0.2.15.
 - Applied PawnIO device permissions and restarted its device instance after integrated sensor driver setup so normal app launches can read CPU sensors.
 - Bumped the app version to 0.2.14.
 - Distinguished leftover PawnIO driver registration after uninstall from a fully installed PawnIO setup.

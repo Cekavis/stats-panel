@@ -89,6 +89,14 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             1,
         ),
         metric(
+            "cpu.fan_speed",
+            "CPU Fan",
+            MetricCategory::Cpu,
+            "RPM",
+            "Bundled Sensor Helper",
+            0,
+        ),
+        metric(
             "memory.usage",
             "Memory",
             MetricCategory::Memory,
@@ -128,6 +136,14 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "W",
             "NVML",
             1,
+        ),
+        metric(
+            "gpu.fan_speed",
+            "GPU Fan",
+            MetricCategory::Gpu,
+            "RPM",
+            "Bundled Sensor Helper",
+            0,
         ),
         metric(
             "gpu.temperature",

@@ -142,6 +142,11 @@ static SensorReading ReadSensors(Computer computer)
         .DefaultIfEmpty(null)
         .Max();
 
+    var cpuFanSpeed = SelectFanSpeed(
+        EnumerateBoardFanSensors(computer.Hardware),
+        preferredNameNeedles: ["CPU"],
+        fallbackToAnyFan: true);
+
     cpuFrequency ??= ReadCpuFrequencyFromWindowsPerformanceCounters();
     cpuTemperature ??= ReadWmiSensor(SensorType.Temperature, "CPU", "Package", "Tctl", "Tdie", "Core Max", "Core Average");
     cpuPower ??= ReadWmiSensor(SensorType.Power, "CPU", "Package", "Cores", "Core", "PPT");
@@ -179,31 +184,31 @@ static SensorReading ReadSensors(Computer computer)
         .DefaultIfEmpty(null)
         .Max();
 
+    var gpuFanSpeed = SelectAverageFanSpeed(gpuSensors);
+
     gpuCoreClock ??= ReadWmiSensor(SensorType.Clock, "GPU Core", "GPU Clock", "Core");
     gpuMemoryClock ??= ReadWmiSensor(SensorType.Clock, "GPU Memory", "Memory");
     gpuTemperature ??= ReadWmiSensor(SensorType.Temperature, "GPU", "Core", "Hot Spot", "Junction");
     gpuPower ??= ReadWmiSensor(SensorType.Power, "GPU", "Board", "Total", "Package");
 
-    var diskTemperature = diskSensors
-        .Where(sensor => sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
-        .Where(sensor => sensor.Value!.Value > 0)
-        .Where(sensor => IsCurrentTemperatureSensor(sensor.Name))
-        .Select(sensor => (double?)sensor.Value!.Value)
-        .DefaultIfEmpty(null)
-        .Max();
+    var diskTemperature = SelectDiskTemperature(diskSensors);
 
     diskTemperature ??= ReadWmiHardwareSensor(
         SensorType.Temperature,
         ["Storage", "Disk", "Drive", "SSD", "HDD", "NVMe"],
-        ["Temperature"]);
+        ["Composite", "Drive", "Temperature"]);
+
+    diskTemperature ??= ReadWindowsStorageReliabilityTemperature();
 
     var hasAnySensor = cpuFrequency.HasValue
         || cpuTemperature.HasValue
         || cpuPower.HasValue
+        || cpuFanSpeed.HasValue
         || gpuCoreClock.HasValue
         || gpuMemoryClock.HasValue
         || gpuTemperature.HasValue
         || gpuPower.HasValue
+        || gpuFanSpeed.HasValue
         || diskTemperature.HasValue;
     var missingCpuHardwareSensors = !cpuTemperature.HasValue || !cpuPower.HasValue;
     var sensorDriverState = SensorDriverInfo.GetPawnIoState();
@@ -228,10 +233,12 @@ static SensorReading ReadSensors(Computer computer)
         cpuFrequency,
         cpuTemperature,
         cpuPower,
+        cpuFanSpeed,
         gpuCoreClock,
         gpuMemoryClock,
         gpuTemperature,
         gpuPower,
+        gpuFanSpeed,
         diskTemperature,
         sensorDriverInstalled,
         sensorDriverState,
@@ -252,6 +259,44 @@ static IEnumerable<ISensor> EnumerateCpuSensors(IEnumerable<IHardware> hardwareI
         }
 
         foreach (var sensor in EnumerateCpuSensors(hardware.SubHardware))
+        {
+            yield return sensor;
+        }
+    }
+}
+
+static IEnumerable<ISensor> EnumerateFanSensors(IEnumerable<IHardware> hardwareItems)
+{
+    foreach (var hardware in hardwareItems)
+    {
+        foreach (var sensor in hardware.Sensors.Where(sensor => sensor.SensorType == SensorType.Fan))
+        {
+            yield return sensor;
+        }
+
+        foreach (var sensor in EnumerateFanSensors(hardware.SubHardware))
+        {
+            yield return sensor;
+        }
+    }
+}
+
+static IEnumerable<ISensor> EnumerateBoardFanSensors(IEnumerable<IHardware> hardwareItems, bool isBoardHardware = false)
+{
+    foreach (var hardware in hardwareItems)
+    {
+        var nextIsBoardHardware = isBoardHardware
+            || hardware.HardwareType == HardwareType.Motherboard
+            || ContainsAny(hardware.Name, "Controller", "Super I/O", "SuperIO", "Nuvoton", "ITE");
+        if (nextIsBoardHardware)
+        {
+            foreach (var sensor in hardware.Sensors.Where(sensor => sensor.SensorType == SensorType.Fan))
+            {
+                yield return sensor;
+            }
+        }
+
+        foreach (var sensor in EnumerateBoardFanSensors(hardware.SubHardware, nextIsBoardHardware))
         {
             yield return sensor;
         }
@@ -318,6 +363,58 @@ static double ScoreGpuHardware(IHardware hardware)
         .Max() ?? 0.0;
 
     return score;
+}
+
+static double? SelectFanSpeed(
+    IEnumerable<ISensor> sensors,
+    string[] preferredNameNeedles,
+    bool fallbackToAnyFan)
+{
+    var validFans = sensors
+        .Where(sensor => sensor.Value.HasValue && sensor.Value.Value > 0)
+        .ToList();
+    var preferredValues = validFans
+        .Where(sensor => ContainsAny(sensor.Name, preferredNameNeedles))
+        .Select(sensor => (double?)sensor.Value!.Value)
+        .ToList();
+
+    if (preferredValues.Count > 0)
+    {
+        return preferredValues.Max();
+    }
+
+    if (!fallbackToAnyFan || validFans.Count == 0)
+    {
+        return null;
+    }
+
+    return validFans
+        .Select(sensor => (double?)sensor.Value!.Value)
+        .DefaultIfEmpty(null)
+        .Max();
+}
+
+static double? SelectAverageFanSpeed(IEnumerable<ISensor> sensors)
+{
+    var values = sensors
+        .Where(sensor => sensor.SensorType == SensorType.Fan && sensor.Value.HasValue)
+        .Where(sensor => sensor.Value!.Value > 0)
+        .Select(sensor => sensor.Value!.Value)
+        .ToList();
+
+    return values.Count > 0 ? values.Average() : null;
+}
+
+static double? SelectDiskTemperature(IEnumerable<ISensor> sensors)
+{
+    var currentTemperatures = sensors
+        .Where(sensor => sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
+        .Where(sensor => sensor.Value!.Value > 0)
+        .Where(sensor => IsCurrentTemperatureSensor(sensor.Name))
+        .Select(sensor => new SensorValue(sensor.Name, sensor.Value!.Value))
+        .ToList();
+
+    return SelectPreferredTemperature(currentTemperatures);
 }
 
 static void DumpSensors(IEnumerable<IHardware> hardwareItems, string indent = "")
@@ -402,12 +499,12 @@ static double? ReadWmiHardwareSensor(
                 .Where(sensor =>
                     ContainsAny(sensor.Parent, hardwareNeedles)
                     || ContainsAny(sensor.Identifier, hardwareNeedles))
-                .Select(sensor => sensor.Value)
+                .Select(sensor => new SensorValue(sensor.Name, sensor.Value!.Value))
                 .ToList();
 
             if (values.Count > 0)
             {
-                return values.Max();
+                return SelectPreferredTemperature(values);
             }
         }
         catch (ManagementException)
@@ -419,6 +516,58 @@ static double? ReadWmiHardwareSensor(
     }
 
     return null;
+}
+
+static double? ReadWindowsStorageReliabilityTemperature()
+{
+    try
+    {
+        using var searcher = new ManagementObjectSearcher(
+            @"root\Microsoft\Windows\Storage",
+            "SELECT Temperature FROM MSFT_StorageReliabilityCounter");
+
+        var values = searcher
+            .Get()
+            .Cast<ManagementObject>()
+            .Select(counter => TryReadDouble(counter["Temperature"]))
+            .Where(value => value.HasValue && value.Value > 0)
+            .Select(value => value!.Value)
+            .ToList();
+
+        return values.Count > 0 ? values.Max() : null;
+    }
+    catch (ManagementException)
+    {
+        return null;
+    }
+    catch (UnauthorizedAccessException)
+    {
+        return null;
+    }
+}
+
+static double? SelectPreferredTemperature(IEnumerable<SensorValue> values)
+{
+    var candidates = values.ToList();
+    foreach (var needles in new[]
+             {
+                 new[] { "Composite" },
+                 new[] { "Drive" },
+                 new[] { "Temperature" },
+             })
+    {
+        var matchingValues = candidates
+            .Where(sensor => ContainsAny(sensor.Name, needles))
+            .Select(sensor => (double?)sensor.Value)
+            .ToList();
+
+        if (matchingValues.Count > 0)
+        {
+            return matchingValues.Max();
+        }
+    }
+
+    return candidates.Count > 0 ? candidates.Select(sensor => (double?)sensor.Value).Max() : null;
 }
 
 static bool IsCurrentTemperatureSensor(string name)
@@ -535,10 +684,12 @@ internal sealed record SensorReading(
     double? CpuFrequency,
     double? CpuTemperature,
     double? CpuPower,
+    double? CpuFanSpeed,
     double? GpuCoreClock,
     double? GpuMemoryClock,
     double? GpuTemperature,
     double? GpuPower,
+    double? GpuFanSpeed,
     double? DiskTemperature,
     bool SensorDriverInstalled,
     string SensorDriverState,
@@ -550,6 +701,8 @@ internal sealed record SensorReading(
         var sensorDriverState = SensorDriverInfo.GetPawnIoState();
         return new SensorReading(
             false,
+            null,
+            null,
             null,
             null,
             null,
@@ -646,3 +799,5 @@ internal sealed class UpdateVisitor : IVisitor
 internal sealed partial class SensorJsonContext : JsonSerializerContext
 {
 }
+
+internal sealed record SensorValue(string Name, double Value);

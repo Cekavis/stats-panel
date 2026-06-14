@@ -166,9 +166,7 @@ fn run_elevated_sensor_driver_setup(
         )
         .env("STATS_PAWNIO_INSTALL_STATE", install_state.as_str())
         .status()
-        .map_err(|error| {
-            format!("Could not start the integrated sensor driver setup: {error}")
-        })?;
+        .map_err(|error| format!("Could not start the integrated sensor driver setup: {error}"))?;
 
     if status.success() {
         Ok(())
@@ -546,6 +544,11 @@ fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
         ensure_metric(&mut preferences.visible_metric_ids, "disk.temperature");
         ensure_metric(&mut preferences.chart_metric_ids, "disk.temperature");
         preferences.metric_schema_version = 2;
+    }
+    if preferences.metric_schema_version < 3 {
+        ensure_metric(&mut preferences.visible_metric_ids, "cpu.fan_speed");
+        ensure_metric(&mut preferences.visible_metric_ids, "gpu.fan_speed");
+        preferences.metric_schema_version = 3;
     }
     preferences.sample_interval_ms = preferences.sample_interval_ms.clamp(500, 5_000);
     preferences.window = sanitize_window_preferences(preferences.window);
