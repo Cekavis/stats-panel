@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Applied PawnIO device permissions and restarted its device instance after integrated sensor driver setup so normal app launches can read CPU sensors.
+- Bumped the app version to 0.2.14.
 - Distinguished leftover PawnIO driver registration after uninstall from a fully installed PawnIO setup.
 - Bumped the app version to 0.2.13.
 - Stopped prompting to install PawnIO again when the integrated sensor driver is already installed but CPU sensors remain unavailable.

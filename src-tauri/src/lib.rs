@@ -6,6 +6,7 @@ use metrics::{metric_manifest, MetricDefinition};
 use preferences::{load_preferences, save_preferences_to_disk, UserPreferences, WindowPreferences};
 use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
 use std::{
+    fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Mutex,
@@ -119,16 +120,37 @@ enum SensorDriverInstallResult {
 fn install_integrated_sensor_driver_impl(
     app: &AppHandle,
 ) -> Result<SensorDriverInstallResult, String> {
-    match pawnio_install_state() {
-        PawnIoInstallState::Installed => return Ok(SensorDriverInstallResult::AlreadyInstalled),
+    let install_state = pawnio_install_state();
+    match install_state {
         PawnIoInstallState::Registered => {
             return Ok(SensorDriverInstallResult::DriverRegistrationRemains);
         }
-        PawnIoInstallState::Missing => {}
+        PawnIoInstallState::Installed | PawnIoInstallState::Missing => {}
     }
 
-    let installer = resolve_pawnio_installer(app)?;
-    let script = "$ErrorActionPreference = 'Stop'; $installer = $env:STATS_PAWNIO_INSTALLER; $process = Start-Process -FilePath $installer -Verb RunAs -Wait -PassThru; exit $process.ExitCode";
+    run_elevated_sensor_driver_setup(app, install_state)?;
+
+    Ok(match install_state {
+        PawnIoInstallState::Installed => SensorDriverInstallResult::AlreadyInstalled,
+        PawnIoInstallState::Missing => SensorDriverInstallResult::Installed,
+        PawnIoInstallState::Registered => SensorDriverInstallResult::DriverRegistrationRemains,
+    })
+}
+
+#[cfg(windows)]
+fn run_elevated_sensor_driver_setup(
+    app: &AppHandle,
+    install_state: PawnIoInstallState,
+) -> Result<(), String> {
+    let installer = match install_state {
+        PawnIoInstallState::Missing => Some(resolve_pawnio_installer(app)?),
+        PawnIoInstallState::Installed | PawnIoInstallState::Registered => None,
+    };
+    let script_path = std::env::temp_dir().join("stats-panel-sensor-driver-setup.ps1");
+    fs::write(&script_path, SENSOR_DRIVER_SETUP_SCRIPT)
+        .map_err(|error| format!("Could not prepare sensor driver setup script: {error}"))?;
+
+    let script = "$ErrorActionPreference = 'Stop'; $process = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$env:STATS_SENSOR_SETUP_SCRIPT) -Verb RunAs -Wait -PassThru; exit $process.ExitCode";
     let status = Command::new("powershell")
         .args([
             "-NoProfile",
@@ -137,21 +159,62 @@ fn install_integrated_sensor_driver_impl(
             "-Command",
             script,
         ])
-        .env("STATS_PAWNIO_INSTALLER", &installer)
+        .env("STATS_SENSOR_SETUP_SCRIPT", &script_path)
+        .env(
+            "STATS_PAWNIO_INSTALLER",
+            installer.as_deref().unwrap_or_else(|| Path::new("")),
+        )
+        .env("STATS_PAWNIO_INSTALL_STATE", install_state.as_str())
         .status()
         .map_err(|error| {
-            format!("Could not start the integrated sensor driver installer: {error}")
+            format!("Could not start the integrated sensor driver setup: {error}")
         })?;
 
     if status.success() {
-        Ok(SensorDriverInstallResult::Installed)
+        Ok(())
     } else {
         Err(format!(
-            "Integrated sensor driver installer exited with code {:?}.",
+            "Integrated sensor driver setup exited with code {:?}.",
             status.code()
         ))
     }
 }
+
+#[cfg(windows)]
+const SENSOR_DRIVER_SETUP_SCRIPT: &str = r#"
+$ErrorActionPreference = "Stop"
+
+if ($env:STATS_PAWNIO_INSTALL_STATE -eq "missing") {
+    $installer = $env:STATS_PAWNIO_INSTALLER
+    if (-not $installer -or -not (Test-Path -LiteralPath $installer)) {
+        Write-Error "PawnIO installer is missing."
+        exit 2
+    }
+
+    $process = Start-Process -FilePath $installer -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+        exit $process.ExitCode
+    }
+}
+
+$devicePath = "HKLM:\SYSTEM\CurrentControlSet\Enum\ROOT\PAWNIO\0000"
+if (Test-Path -LiteralPath $devicePath) {
+    $sddl = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;BU)"
+    $sd = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
+    $bytes = New-Object byte[] $sd.BinaryLength
+    $sd.GetBinaryForm($bytes, 0)
+    Set-ItemProperty -Path $devicePath -Name Security -Value $bytes
+
+    & pnputil.exe /restart-device "ROOT\PAWNIO\0000" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & sc.exe stop PawnIO | Out-Null
+        Start-Sleep -Seconds 1
+        & sc.exe start PawnIO | Out-Null
+    }
+}
+
+exit 0
+"#;
 
 #[cfg(not(windows))]
 fn install_integrated_sensor_driver_impl(
@@ -161,10 +224,22 @@ fn install_integrated_sensor_driver_impl(
 }
 
 #[cfg(windows)]
+#[derive(Clone, Copy)]
 enum PawnIoInstallState {
     Installed,
     Registered,
     Missing,
+}
+
+#[cfg(windows)]
+impl PawnIoInstallState {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Installed => "installed",
+            Self::Registered => "registered",
+            Self::Missing => "missing",
+        }
+    }
 }
 
 #[cfg(windows)]
