@@ -85,7 +85,7 @@ fn set_window_preferences(
 
 #[tauri::command]
 fn request_sensor_permissions() -> String {
-    "CPU temperature and power are collected by the bundled sensor helper. If sensors stay unavailable after approving administrator access, the hardware, driver, or firmware may not expose those readings.".to_string()
+    "CPU temperature, CPU power, GPU helper sensors, and disk temperature are collected by the bundled sensor helper. If sensors stay unavailable after approving administrator access, the hardware, driver, or firmware may not expose those readings.".to_string()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -314,9 +314,20 @@ fn save_window_geometry(app: &AppHandle) {
 }
 
 fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
+    if preferences.metric_schema_version < 2 {
+        ensure_metric(&mut preferences.visible_metric_ids, "disk.temperature");
+        ensure_metric(&mut preferences.chart_metric_ids, "disk.temperature");
+        preferences.metric_schema_version = 2;
+    }
     preferences.sample_interval_ms = preferences.sample_interval_ms.clamp(500, 5_000);
     preferences.window = sanitize_window_preferences(preferences.window);
     preferences
+}
+
+fn ensure_metric(metric_ids: &mut Vec<String>, id: &str) {
+    if !metric_ids.iter().any(|metric_id| metric_id == id) {
+        metric_ids.push(id.to_string());
+    }
 }
 
 fn sanitize_window_preferences(mut window: WindowPreferences) -> WindowPreferences {

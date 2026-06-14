@@ -14,6 +14,7 @@ var computer = new Computer
     IsMotherboardEnabled = true,
     IsControllerEnabled = true,
     IsPowerMonitorEnabled = true,
+    IsStorageEnabled = true,
 };
 
 try
@@ -115,6 +116,7 @@ static SensorReading ReadSensors(Computer computer)
 {
     var sensors = EnumerateCpuSensors(computer.Hardware).ToList();
     var gpuSensors = SelectPrimaryGpuSensors(computer.Hardware);
+    var diskSensors = EnumerateDiskSensors(computer.Hardware).ToList();
     var cpuFrequency = sensors
         .Where(sensor => sensor.SensorType == SensorType.Clock && sensor.Value.HasValue)
         .Where(sensor => sensor.Value!.Value > 0)
@@ -181,6 +183,18 @@ static SensorReading ReadSensors(Computer computer)
     gpuTemperature ??= ReadWmiSensor(SensorType.Temperature, "GPU", "Core", "Hot Spot", "Junction");
     gpuPower ??= ReadWmiSensor(SensorType.Power, "GPU", "Board", "Total", "Package");
 
+    var diskTemperature = diskSensors
+        .Where(sensor => sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
+        .Where(sensor => sensor.Value!.Value > 0)
+        .Select(sensor => (double?)sensor.Value!.Value)
+        .DefaultIfEmpty(null)
+        .Max();
+
+    diskTemperature ??= ReadWmiHardwareSensor(
+        SensorType.Temperature,
+        ["Storage", "Disk", "Drive", "SSD", "HDD", "NVMe"],
+        ["Temperature"]);
+
     var message = cpuFrequency.HasValue
         || cpuTemperature.HasValue
         || cpuPower.HasValue
@@ -188,8 +202,9 @@ static SensorReading ReadSensors(Computer computer)
         || gpuMemoryClock.HasValue
         || gpuTemperature.HasValue
         || gpuPower.HasValue
+        || diskTemperature.HasValue
         ? "Bundled sensor helper online."
-        : "CPU and GPU sensors were not found.";
+        : "CPU, GPU, and disk sensors were not found.";
 
     return new SensorReading(
         true,
@@ -200,6 +215,7 @@ static SensorReading ReadSensors(Computer computer)
         gpuMemoryClock,
         gpuTemperature,
         gpuPower,
+        diskTemperature,
         message,
         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 }
@@ -253,6 +269,26 @@ static IEnumerable<IHardware> EnumerateGpuHardware(IEnumerable<IHardware> hardwa
     }
 }
 
+static IEnumerable<ISensor> EnumerateDiskSensors(IEnumerable<IHardware> hardwareItems)
+{
+    foreach (var hardware in hardwareItems)
+    {
+        if (hardware.HardwareType == HardwareType.Storage
+            || ContainsAny(hardware.Name, "Storage", "Disk", "Drive", "SSD", "HDD", "NVMe"))
+        {
+            foreach (var sensor in hardware.Sensors)
+            {
+                yield return sensor;
+            }
+        }
+
+        foreach (var sensor in EnumerateDiskSensors(hardware.SubHardware))
+        {
+            yield return sensor;
+        }
+    }
+}
+
 static double ScoreGpuHardware(IHardware hardware)
 {
     var score = hardware.HardwareType == HardwareType.GpuNvidia ? 10_000.0 : 0.0;
@@ -299,6 +335,53 @@ static double? ReadWmiSensor(SensorType sensorType, params string[] nameNeedles)
                 })
                 .Where(sensor => sensor.Value.HasValue && sensor.Value.Value > 0)
                 .Where(sensor => ContainsAny(sensor.Name, nameNeedles))
+                .Select(sensor => sensor.Value)
+                .ToList();
+
+            if (values.Count > 0)
+            {
+                return values.Max();
+            }
+        }
+        catch (ManagementException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
+    return null;
+}
+
+static double? ReadWmiHardwareSensor(
+    SensorType sensorType,
+    string[] hardwareNeedles,
+    params string[] sensorNameNeedles)
+{
+    foreach (var scope in new[] { @"root\LibreHardwareMonitor", @"root\OpenHardwareMonitor" })
+    {
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                scope,
+                $"SELECT Name, SensorType, Value, Parent, Identifier FROM Sensor WHERE SensorType = '{sensorType}'");
+
+            var values = searcher
+                .Get()
+                .Cast<ManagementObject>()
+                .Select(sensor => new
+                {
+                    Name = Convert.ToString(sensor["Name"]) ?? "",
+                    Parent = Convert.ToString(sensor["Parent"]) ?? "",
+                    Identifier = Convert.ToString(sensor["Identifier"]) ?? "",
+                    Value = TryReadDouble(sensor["Value"]),
+                })
+                .Where(sensor => sensor.Value.HasValue && sensor.Value.Value > 0)
+                .Where(sensor => ContainsAny(sensor.Name, sensorNameNeedles))
+                .Where(sensor =>
+                    ContainsAny(sensor.Parent, hardwareNeedles)
+                    || ContainsAny(sensor.Identifier, hardwareNeedles))
                 .Select(sensor => sensor.Value)
                 .ToList();
 
@@ -423,12 +506,13 @@ internal sealed record SensorReading(
     double? GpuMemoryClock,
     double? GpuTemperature,
     double? GpuPower,
+    double? DiskTemperature,
     string Message,
     long Timestamp)
 {
     public static SensorReading Unavailable(string message)
     {
-        return new SensorReading(false, null, null, null, null, null, null, null, message, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        return new SensorReading(false, null, null, null, null, null, null, null, null, message, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 }
 

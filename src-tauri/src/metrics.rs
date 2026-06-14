@@ -185,6 +185,14 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "sysinfo",
             1,
         ),
+        metric(
+            "disk.temperature",
+            "Disk Temperature",
+            MetricCategory::Disk,
+            "℃",
+            "Bundled Sensor Helper",
+            1,
+        ),
     ]
 }
 

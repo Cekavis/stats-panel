@@ -67,7 +67,7 @@ const DASHBOARD_GROUPS: MetricGroup[] = [
   {
     id: "throughput",
     title: "Network / Disk",
-    metricIds: ["network.download", "network.upload", "disk.read", "disk.write"],
+    metricIds: ["network.download", "network.upload", "disk.read", "disk.write", "disk.temperature"],
   },
 ];
 

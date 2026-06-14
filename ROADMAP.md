@@ -22,7 +22,7 @@ Status: complete
 Status: complete
 
 - NVML provider covers NVIDIA GPU usage, clocks, power, temperature, and VRAM.
-- LibreHardwareMonitor/OpenHardwareMonitor WMI bridge reports CPU temperature and power when available.
+- LibreHardwareMonitor/OpenHardwareMonitor WMI bridge reports CPU temperature, CPU power, and disk temperature when available.
 - Missing providers surface unavailable status with actionable messages.
 
 ## Phase 3 - Secondary Display Component UX

@@ -6,7 +6,7 @@ Stats Panel is a compact Windows performance monitor built for a fixed region on
 
 - Real-time CPU, memory, network, and disk telemetry through `sysinfo`.
 - NVIDIA GPU telemetry through NVML when an NVIDIA driver is available.
-- CPU temperature and power sensor bridge via LibreHardwareMonitor/OpenHardwareMonitor WMI when available.
+- CPU temperature, CPU power, and disk temperature sensor bridge via LibreHardwareMonitor/OpenHardwareMonitor WMI when available.
 - Custom visible metrics and chart metrics.
 - Compact, borderless, resizable widget window with always-on-top support.
 - Preferences stored locally in the Tauri app config directory.
@@ -43,7 +43,6 @@ rtk cargo test
 
 ## Sensor Notes
 
-Windows exposes CPU usage, memory, network, and disk activity without special setup. CPU temperature and power usually require a hardware monitor provider. For those readings, run LibreHardwareMonitor or OpenHardwareMonitor with WMI enabled; administrator privileges may be required on some systems.
+Windows exposes CPU usage, memory, network, and disk activity without special setup. CPU temperature, CPU power, and disk temperature usually require a hardware monitor provider. For those readings, run LibreHardwareMonitor or OpenHardwareMonitor with WMI enabled; administrator privileges may be required on some systems.
 
 NVIDIA GPU metrics use NVML through the installed NVIDIA driver. Systems without NVML show GPU metrics as unavailable instead of using placeholder values.
-

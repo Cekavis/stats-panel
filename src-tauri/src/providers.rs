@@ -12,8 +12,8 @@ use tauri_plugin_shell::{
     ShellExt,
 };
 
-const CPU_SENSOR_MESSAGE: &str =
-    "Bundled sensor helper is unavailable. CPU temperature and power sensors cannot be read.";
+const SENSOR_HELPER_MESSAGE: &str =
+    "Bundled sensor helper is unavailable. CPU, GPU, and disk sensors cannot be read.";
 
 pub struct TelemetryCollector {
     system: System,
@@ -332,6 +332,14 @@ impl TelemetryCollector {
                     timestamp,
                     reading.gpu_power,
                 );
+                push_optional_sensor(
+                    samples,
+                    "disk.temperature",
+                    "℃",
+                    timestamp,
+                    reading.disk_temperature,
+                    "Disk temperature sensor not found.",
+                );
             }
             Err(message) => {
                 statuses.push(provider_status(
@@ -350,6 +358,13 @@ impl TelemetryCollector {
                 samples.push(unavailable_sample(
                     "cpu.power",
                     "W",
+                    "Bundled Sensor Helper",
+                    timestamp,
+                    message.clone(),
+                ));
+                samples.push(unavailable_sample(
+                    "disk.temperature",
+                    "℃",
                     "Bundled Sensor Helper",
                     timestamp,
                     message,
@@ -381,6 +396,7 @@ struct HardwareReading {
     gpu_memory_clock: Option<f64>,
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
+    disk_temperature: Option<f64>,
     message: String,
 }
 
@@ -395,6 +411,7 @@ struct HelperReading {
     gpu_memory_clock: Option<f64>,
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
+    disk_temperature: Option<f64>,
     message: String,
 }
 
@@ -442,6 +459,7 @@ impl HardwareMonitorProvider {
             gpu_memory_clock: reading.gpu_memory_clock,
             gpu_temperature: reading.gpu_temperature,
             gpu_power: reading.gpu_power,
+            disk_temperature: reading.disk_temperature,
             message: reading.message,
         };
     }
@@ -491,11 +509,11 @@ impl HardwareMonitorProvider {
 }
 
 pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider {
-    let provider = HardwareMonitorProvider::unavailable(CPU_SENSOR_MESSAGE);
+    let provider = HardwareMonitorProvider::unavailable(SENSOR_HELPER_MESSAGE);
 
     #[cfg(not(windows))]
     {
-        provider.set_unavailable(CPU_SENSOR_MESSAGE);
+        provider.set_unavailable(SENSOR_HELPER_MESSAGE);
         provider
     }
 
@@ -586,10 +604,7 @@ fn push_nvml_metric(
     }
 }
 
-fn nvml_clock_value(
-    device: &Device,
-    clock: Clock,
-) -> Result<f64, nvml_wrapper::error::NvmlError> {
+fn nvml_clock_value(device: &Device, clock: Clock) -> Result<f64, nvml_wrapper::error::NvmlError> {
     device
         .clock(clock, ClockId::Current)
         .or_else(|_| device.clock_info(clock))
@@ -738,6 +753,7 @@ mod tests {
         assert_eq!(reading.gpu_memory_clock, Some(10501.0));
         assert_eq!(reading.gpu_temperature, Some(55.0));
         assert_eq!(reading.gpu_power, Some(128.5));
+        assert_eq!(reading.disk_temperature, None);
         assert_eq!(reading.message, "online");
     }
 

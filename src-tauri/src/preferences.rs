@@ -5,6 +5,8 @@ use tauri::{AppHandle, Manager};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserPreferences {
+    #[serde(default)]
+    pub metric_schema_version: u32,
     pub visible_metric_ids: Vec<String>,
     pub chart_metric_ids: Vec<String>,
     pub sample_interval_ms: u64,
@@ -25,6 +27,7 @@ pub struct WindowPreferences {
 impl Default for UserPreferences {
     fn default() -> Self {
         Self {
+            metric_schema_version: 2,
             visible_metric_ids: vec![
                 "cpu.usage",
                 "cpu.frequency",
@@ -43,6 +46,7 @@ impl Default for UserPreferences {
                 "network.upload",
                 "disk.read",
                 "disk.write",
+                "disk.temperature",
             ]
             .into_iter()
             .map(String::from)
@@ -56,6 +60,7 @@ impl Default for UserPreferences {
                 "network.upload",
                 "disk.read",
                 "disk.write",
+                "disk.temperature",
             ]
             .into_iter()
             .map(String::from)
@@ -120,6 +125,9 @@ mod tests {
         assert!(preferences
             .visible_metric_ids
             .contains(&"gpu.usage".to_string()));
+        assert!(preferences
+            .visible_metric_ids
+            .contains(&"disk.temperature".to_string()));
         assert_eq!(preferences.sample_interval_ms, 1_000);
         assert_eq!(preferences.window.width, 1280.0);
     }
@@ -132,6 +140,7 @@ mod tests {
             serde_json::from_str(&json).expect("preferences should deserialize");
 
         assert!(json.contains("visibleMetricIds"));
+        assert!(json.contains("metricSchemaVersion"));
         assert_eq!(parsed.chart_metric_ids, preferences.chart_metric_ids);
     }
 }
