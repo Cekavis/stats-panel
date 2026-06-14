@@ -120,13 +120,10 @@ static SensorReading ReadSensors(Computer computer)
     var sensors = EnumerateCpuSensors(computer.Hardware).ToList();
     var gpuSensors = SelectPrimaryGpuSensors(computer.Hardware);
     var diskSensors = EnumerateDiskSensors(computer.Hardware).ToList();
-    var cpuFrequency = sensors
+    var cpuFrequency = SelectCpuFrequency(sensors
         .Where(sensor => sensor.SensorType == SensorType.Clock && sensor.Value.HasValue)
         .Where(sensor => sensor.Value!.Value > 0)
-        .Where(sensor => !ContainsAny(sensor.Name, "Bus", "BCLK"))
-        .Select(sensor => (double?)sensor.Value!.Value)
-        .DefaultIfEmpty(null)
-        .Average();
+        .Select(sensor => new SensorValue(sensor.Name, sensor.Value!.Value)));
 
     var cpuTemperature = sensors
         .Where(sensor => sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
@@ -702,6 +699,29 @@ static double? ReadCpuFrequencyFromWindowsPerformanceCounters()
     {
         return null;
     }
+}
+
+static double? SelectCpuFrequency(IEnumerable<SensorValue> clockSensors)
+{
+    var candidateClocks = clockSensors
+        .Where(sensor => !ContainsAny(sensor.Name, "Bus", "BCLK", "Effective"))
+        .Where(sensor => sensor.Value > 0)
+        .ToList();
+    if (candidateClocks.Count == 0)
+    {
+        return null;
+    }
+
+    var aggregateClocks = candidateClocks
+        .Where(sensor => ContainsAny(sensor.Name, "Average", "Package", "Total"))
+        .Select(sensor => sensor.Value)
+        .ToList();
+    if (aggregateClocks.Count > 0)
+    {
+        return aggregateClocks.Max();
+    }
+
+    return candidateClocks.Average(sensor => sensor.Value);
 }
 
 static double? ReadMaxCpuClockSpeed()

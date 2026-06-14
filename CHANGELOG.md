@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Fixed CPU frequency readings so effective/idle core clocks no longer drag the displayed CPU clock far below the current hardware clock.
+- Bumped the app version to 0.2.17.
 - Added a direct NVMe SMART composite temperature fallback so drives can report current disk temperature even when LibreHardwareMonitor only exposes threshold sensors to the bundled helper.
 - Bumped the app version to 0.2.16.
 - Added CPU and GPU fan speed metrics from the bundled sensor helper.
