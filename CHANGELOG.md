@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Ignored disk sensor threshold readings such as critical or warning temperature when choosing the current disk temperature.
+- Bumped the app version to 0.2.8.
 - Added disk temperature monitoring through the bundled sensor helper, including default dashboard visibility and charting.
 - Bumped the app version to 0.2.7.
 - Bumped the app version to 0.2.1.

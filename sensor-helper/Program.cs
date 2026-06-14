@@ -186,6 +186,7 @@ static SensorReading ReadSensors(Computer computer)
     var diskTemperature = diskSensors
         .Where(sensor => sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
         .Where(sensor => sensor.Value!.Value > 0)
+        .Where(sensor => IsCurrentTemperatureSensor(sensor.Name))
         .Select(sensor => (double?)sensor.Value!.Value)
         .DefaultIfEmpty(null)
         .Max();
@@ -379,6 +380,7 @@ static double? ReadWmiHardwareSensor(
                 })
                 .Where(sensor => sensor.Value.HasValue && sensor.Value.Value > 0)
                 .Where(sensor => ContainsAny(sensor.Name, sensorNameNeedles))
+                .Where(sensor => IsCurrentTemperatureSensor(sensor.Name))
                 .Where(sensor =>
                     ContainsAny(sensor.Parent, hardwareNeedles)
                     || ContainsAny(sensor.Identifier, hardwareNeedles))
@@ -399,6 +401,19 @@ static double? ReadWmiHardwareSensor(
     }
 
     return null;
+}
+
+static bool IsCurrentTemperatureSensor(string name)
+{
+    return !ContainsAny(
+        name,
+        "Critical",
+        "Warning",
+        "Limit",
+        "Threshold",
+        "Maximum",
+        "Highest",
+        "Worst");
 }
 
 static double? ReadCpuFrequencyFromWindowsPerformanceCounters()
