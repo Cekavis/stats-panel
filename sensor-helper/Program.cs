@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Management;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LibreHardwareMonitor.Hardware;
+using Microsoft.Win32.SafeHandles;
 using Microsoft.Win32;
 
 var intervalMs = ParseInterval(args);
@@ -199,6 +201,7 @@ static SensorReading ReadSensors(Computer computer)
         ["Composite", "Drive", "Temperature"]);
 
     diskTemperature ??= ReadWindowsStorageReliabilityTemperature();
+    diskTemperature ??= ReadNvmeCompositeTemperatureFromPhysicalDrives();
 
     var hasAnySensor = cpuFrequency.HasValue
         || cpuTemperature.HasValue
@@ -546,6 +549,85 @@ static double? ReadWindowsStorageReliabilityTemperature()
     }
 }
 
+static double? ReadNvmeCompositeTemperatureFromPhysicalDrives()
+{
+    var values = Enumerable
+        .Range(0, 32)
+        .Select(TryReadNvmeCompositeTemperature)
+        .Where(value => value.HasValue)
+        .Select(value => value!.Value)
+        .ToList();
+
+    return values.Count > 0 ? values.Max() : null;
+}
+
+static double? TryReadNvmeCompositeTemperature(int physicalDriveIndex)
+{
+    using var drive = NativeMethods.CreateFile(
+        $@"\\.\PhysicalDrive{physicalDriveIndex}",
+        0,
+        NativeMethods.FileShareRead | NativeMethods.FileShareWrite,
+        IntPtr.Zero,
+        NativeMethods.OpenExisting,
+        0,
+        IntPtr.Zero);
+
+    if (drive.IsInvalid)
+    {
+        return null;
+    }
+
+    return QueryNvmeCompositeTemperature(drive, NativeMethods.StorageDeviceProtocolSpecificProperty)
+        ?? QueryNvmeCompositeTemperature(drive, NativeMethods.StorageAdapterProtocolSpecificProperty);
+}
+
+static double? QueryNvmeCompositeTemperature(SafeFileHandle drive, uint propertyId)
+{
+    const int protocolSpecificOffset = 8;
+    const int protocolSpecificLength = 40;
+    const int nvmeSmartLogLength = 512;
+    var buffer = new byte[protocolSpecificOffset + protocolSpecificLength + nvmeSmartLogLength];
+
+    WriteUInt32(buffer, 0, propertyId);
+    WriteUInt32(buffer, 4, NativeMethods.PropertyStandardQuery);
+    WriteUInt32(buffer, protocolSpecificOffset, NativeMethods.ProtocolTypeNvme);
+    WriteUInt32(buffer, protocolSpecificOffset + 4, NativeMethods.NvmeDataTypeLogPage);
+    WriteUInt32(buffer, protocolSpecificOffset + 8, NativeMethods.NvmeSmartHealthLogPage);
+    WriteUInt32(buffer, protocolSpecificOffset + 16, protocolSpecificLength);
+    WriteUInt32(buffer, protocolSpecificOffset + 20, nvmeSmartLogLength);
+
+    if (!NativeMethods.DeviceIoControl(
+            drive,
+            NativeMethods.IoctlStorageQueryProperty,
+            buffer,
+            buffer.Length,
+            buffer,
+            buffer.Length,
+            out _,
+            IntPtr.Zero))
+    {
+        return null;
+    }
+
+    var logOffset = protocolSpecificOffset + protocolSpecificLength;
+    if (buffer.Length < logOffset + 3)
+    {
+        return null;
+    }
+
+    var kelvin = buffer[logOffset + 1] | (buffer[logOffset + 2] << 8);
+    var celsius = kelvin - 273.15;
+    return celsius is > -50 and < 150 ? celsius : null;
+}
+
+static void WriteUInt32(byte[] buffer, int offset, uint value)
+{
+    buffer[offset] = (byte)(value & 0xFF);
+    buffer[offset + 1] = (byte)((value >> 8) & 0xFF);
+    buffer[offset + 2] = (byte)((value >> 16) & 0xFF);
+    buffer[offset + 3] = (byte)((value >> 24) & 0xFF);
+}
+
 static double? SelectPreferredTemperature(IEnumerable<SensorValue> values)
 {
     var candidates = values.ToList();
@@ -801,3 +883,39 @@ internal sealed partial class SensorJsonContext : JsonSerializerContext
 }
 
 internal sealed record SensorValue(string Name, double Value);
+
+internal static class NativeMethods
+{
+    public const uint FileShareRead = 0x00000001;
+    public const uint FileShareWrite = 0x00000002;
+    public const uint OpenExisting = 3;
+    public const uint IoctlStorageQueryProperty = 0x002D1400;
+    public const uint PropertyStandardQuery = 0;
+    public const uint StorageAdapterProtocolSpecificProperty = 49;
+    public const uint StorageDeviceProtocolSpecificProperty = 50;
+    public const uint ProtocolTypeNvme = 3;
+    public const uint NvmeDataTypeLogPage = 2;
+    public const uint NvmeSmartHealthLogPage = 2;
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern SafeFileHandle CreateFile(
+        string fileName,
+        uint desiredAccess,
+        uint shareMode,
+        IntPtr securityAttributes,
+        uint creationDisposition,
+        uint flagsAndAttributes,
+        IntPtr templateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DeviceIoControl(
+        SafeFileHandle device,
+        uint ioControlCode,
+        byte[] inBuffer,
+        int inBufferSize,
+        byte[] outBuffer,
+        int outBufferSize,
+        out uint bytesReturned,
+        IntPtr overlapped);
+}

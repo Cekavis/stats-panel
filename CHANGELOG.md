@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added a direct NVMe SMART composite temperature fallback so drives can report current disk temperature even when LibreHardwareMonitor only exposes threshold sensors to the bundled helper.
+- Bumped the app version to 0.2.16.
 - Added CPU and GPU fan speed metrics from the bundled sensor helper.
 - Preferred disk Composite Temperature readings while continuing to ignore disk warning and critical threshold sensors.
 - Bumped the app version to 0.2.15.
