@@ -206,15 +206,21 @@ static SensorReading ReadSensors(Computer computer)
         || gpuPower.HasValue
         || diskTemperature.HasValue;
     var missingCpuHardwareSensors = !cpuTemperature.HasValue || !cpuPower.HasValue;
-    var sensorDriverInstalled = SensorDriverInfo.IsPawnIoInstalled();
+    var sensorDriverState = SensorDriverInfo.GetPawnIoState();
+    var sensorDriverInstalled = sensorDriverState == SensorDriverInfo.Installed;
+    var sensorDriverRegistered = sensorDriverState == SensorDriverInfo.Registered;
     var message = hasAnySensor
         ? missingCpuHardwareSensors
             ? sensorDriverInstalled
                 ? "Bundled sensor helper online. PawnIO is installed, but CPU temperature or power sensors are still unavailable on this hardware."
+                : sensorDriverRegistered
+                    ? "Bundled sensor helper online. PawnIO was uninstalled, but its driver registration still remains; CPU temperature or power sensors are unavailable."
                 : "Bundled sensor helper online. Enable the integrated sensor driver to unlock CPU temperature and power when this hardware requires low-level access."
             : "Bundled sensor helper online."
         : sensorDriverInstalled
             ? "PawnIO is installed, but CPU, GPU, and disk sensors were not found on this hardware."
+            : sensorDriverRegistered
+                ? "PawnIO was uninstalled, but its driver registration still remains; CPU, GPU, and disk sensors were not found on this hardware."
             : "CPU, GPU, and disk sensors were not found. Enable the integrated sensor driver if this hardware requires low-level access.";
 
     return new SensorReading(
@@ -228,6 +234,7 @@ static SensorReading ReadSensors(Computer computer)
         gpuPower,
         diskTemperature,
         sensorDriverInstalled,
+        sensorDriverState,
         message,
         DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
 }
@@ -534,25 +541,54 @@ internal sealed record SensorReading(
     double? GpuPower,
     double? DiskTemperature,
     bool SensorDriverInstalled,
+    string SensorDriverState,
     string Message,
     long Timestamp)
 {
     public static SensorReading Unavailable(string message)
     {
-        return new SensorReading(false, null, null, null, null, null, null, null, null, SensorDriverInfo.IsPawnIoInstalled(), message, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var sensorDriverState = SensorDriverInfo.GetPawnIoState();
+        return new SensorReading(
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            sensorDriverState == SensorDriverInfo.Installed,
+            sensorDriverState,
+            message,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 }
 
 internal static class SensorDriverInfo
 {
-    public static bool IsPawnIoInstalled()
+    public const string Installed = "installed";
+    public const string Registered = "registered";
+    public const string Missing = "missing";
+
+    public static string GetPawnIoState()
     {
-        using var serviceKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\PawnIO");
-        if (serviceKey is not null)
+        if (HasPawnIoUninstallEntry())
         {
-            return true;
+            return Installed;
         }
 
+        return HasPawnIoServiceKey() ? Registered : Missing;
+    }
+
+    private static bool HasPawnIoServiceKey()
+    {
+        using var serviceKey = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\PawnIO");
+        return serviceKey is not null;
+    }
+
+    private static bool HasPawnIoUninstallEntry()
+    {
         foreach (var path in new[]
                  {
                      @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",

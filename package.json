@@ -1,7 +1,7 @@
 {
   "name": "stats-panel",
   "private": true,
-  "version": "0.2.12",
+  "version": "0.2.13",
   "type": "module",
   "scripts": {
     "build:driver": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ensure-pawnio-installer.ps1",

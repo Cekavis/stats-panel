@@ -99,20 +99,32 @@ fn install_integrated_sensor_driver(
     app: AppHandle,
     hardware_monitor: State<'_, HardwareMonitorProvider>,
 ) -> Result<String, String> {
-    let installed = install_integrated_sensor_driver_impl(&app)?;
+    let result = install_integrated_sensor_driver_impl(&app)?;
     hardware_monitor.restart(&app);
 
-    if installed {
-        Ok("Integrated sensor driver is already installed. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
-    } else {
-        Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
+    match result {
+        SensorDriverInstallResult::AlreadyInstalled => Ok("Integrated sensor driver is already installed. Stats Panel is reconnecting to the bundled sensor helper.".to_string()),
+        SensorDriverInstallResult::Installed => Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string()),
+        SensorDriverInstallResult::DriverRegistrationRemains => Ok("PawnIO was uninstalled, but its driver registration still remains. Restart Windows or remove the residual PawnIO driver registration before installing it again.".to_string()),
     }
 }
 
+enum SensorDriverInstallResult {
+    AlreadyInstalled,
+    Installed,
+    DriverRegistrationRemains,
+}
+
 #[cfg(windows)]
-fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<bool, String> {
-    if is_pawnio_installed() {
-        return Ok(true);
+fn install_integrated_sensor_driver_impl(
+    app: &AppHandle,
+) -> Result<SensorDriverInstallResult, String> {
+    match pawnio_install_state() {
+        PawnIoInstallState::Installed => return Ok(SensorDriverInstallResult::AlreadyInstalled),
+        PawnIoInstallState::Registered => {
+            return Ok(SensorDriverInstallResult::DriverRegistrationRemains);
+        }
+        PawnIoInstallState::Missing => {}
     }
 
     let installer = resolve_pawnio_installer(app)?;
@@ -132,7 +144,7 @@ fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<bool, String
         })?;
 
     if status.success() {
-        Ok(false)
+        Ok(SensorDriverInstallResult::Installed)
     } else {
         Err(format!(
             "Integrated sensor driver installer exited with code {:?}.",
@@ -142,14 +154,22 @@ fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<bool, String
 }
 
 #[cfg(not(windows))]
-fn install_integrated_sensor_driver_impl(_app: &AppHandle) -> Result<bool, String> {
+fn install_integrated_sensor_driver_impl(
+    _app: &AppHandle,
+) -> Result<SensorDriverInstallResult, String> {
     Err("The integrated sensor driver is only available on Windows.".to_string())
 }
 
 #[cfg(windows)]
-fn is_pawnio_installed() -> bool {
-    [
-        r"HKLM\SYSTEM\CurrentControlSet\Services\PawnIO",
+enum PawnIoInstallState {
+    Installed,
+    Registered,
+    Missing,
+}
+
+#[cfg(windows)]
+fn pawnio_install_state() -> PawnIoInstallState {
+    if [
         r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
         r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
     ]
@@ -162,7 +182,26 @@ fn is_pawnio_installed() -> bool {
             .status()
             .map(|status| status.success())
             .unwrap_or(false)
-    })
+    }) {
+        return PawnIoInstallState::Installed;
+    }
+
+    if registry_key_exists(r"HKLM\SYSTEM\CurrentControlSet\Services\PawnIO") {
+        return PawnIoInstallState::Registered;
+    }
+
+    PawnIoInstallState::Missing
+}
+
+#[cfg(windows)]
+fn registry_key_exists(key: &str) -> bool {
+    Command::new("reg")
+        .args(["query", key])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
 }
 
 fn resolve_pawnio_installer(app: &AppHandle) -> Result<PathBuf, String> {

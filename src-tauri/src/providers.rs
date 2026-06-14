@@ -294,10 +294,7 @@ impl TelemetryCollector {
                     "℃",
                     timestamp,
                     reading.cpu_temperature,
-                    &missing_cpu_sensor_message(
-                        "CPU temperature",
-                        reading.sensor_driver_installed,
-                    ),
+                    &missing_cpu_sensor_message("CPU temperature", &reading.sensor_driver_state),
                 );
                 push_optional_sensor(
                     samples,
@@ -305,7 +302,7 @@ impl TelemetryCollector {
                     "W",
                     timestamp,
                     reading.cpu_power,
-                    &missing_cpu_sensor_message("CPU power", reading.sensor_driver_installed),
+                    &missing_cpu_sensor_message("CPU power", &reading.sensor_driver_state),
                 );
                 push_helper_sensor_if_available(
                     samples,
@@ -400,7 +397,7 @@ struct HardwareReading {
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
     disk_temperature: Option<f64>,
-    sensor_driver_installed: bool,
+    sensor_driver_state: String,
     message: String,
 }
 
@@ -418,6 +415,8 @@ struct HelperReading {
     disk_temperature: Option<f64>,
     #[serde(default)]
     sensor_driver_installed: bool,
+    #[serde(default)]
+    sensor_driver_state: String,
     message: String,
 }
 
@@ -466,7 +465,7 @@ impl HardwareMonitorProvider {
             gpu_temperature: reading.gpu_temperature,
             gpu_power: reading.gpu_power,
             disk_temperature: reading.disk_temperature,
-            sensor_driver_installed: reading.sensor_driver_installed,
+            sensor_driver_state: sensor_driver_state(&reading),
             message: reading.message,
         };
     }
@@ -654,15 +653,29 @@ fn push_optional_sensor(
     }
 }
 
-fn missing_cpu_sensor_message(label: &str, sensor_driver_installed: bool) -> String {
-    if sensor_driver_installed {
-        format!(
-            "{label} sensor not found. PawnIO is installed, but this hardware, firmware, or the current sensor library may not expose that reading."
-        )
+fn sensor_driver_state(reading: &HelperReading) -> String {
+    if !reading.sensor_driver_state.is_empty() {
+        return reading.sensor_driver_state.clone();
+    }
+
+    if reading.sensor_driver_installed {
+        "installed".to_string()
     } else {
-        format!(
+        "missing".to_string()
+    }
+}
+
+fn missing_cpu_sensor_message(label: &str, sensor_driver_state: &str) -> String {
+    match sensor_driver_state {
+        "installed" => format!(
+            "{label} sensor not found. PawnIO is installed, but this hardware, firmware, or the current sensor library may not expose that reading."
+        ),
+        "registered" => format!(
+            "{label} sensor not found. PawnIO was uninstalled, but its driver registration still remains on this system."
+        ),
+        _ => format!(
             "{label} sensor not found. Enable the integrated sensor driver if this hardware requires low-level access."
-        )
+        ),
     }
 }
 

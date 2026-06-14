@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Distinguished leftover PawnIO driver registration after uninstall from a fully installed PawnIO setup.
+- Bumped the app version to 0.2.13.
 - Stopped prompting to install PawnIO again when the integrated sensor driver is already installed but CPU sensors remain unavailable.
 - Bumped the app version to 0.2.12.
 - Removed the Windows startup administrator requirement; only integrated sensor driver installation requests elevation.
