@@ -294,7 +294,10 @@ impl TelemetryCollector {
                     "℃",
                     timestamp,
                     reading.cpu_temperature,
-                    "CPU temperature sensor not found. Enable the integrated sensor driver if this hardware requires low-level access.",
+                    &missing_cpu_sensor_message(
+                        "CPU temperature",
+                        reading.sensor_driver_installed,
+                    ),
                 );
                 push_optional_sensor(
                     samples,
@@ -302,7 +305,7 @@ impl TelemetryCollector {
                     "W",
                     timestamp,
                     reading.cpu_power,
-                    "CPU power sensor not found. Enable the integrated sensor driver if this hardware requires low-level access.",
+                    &missing_cpu_sensor_message("CPU power", reading.sensor_driver_installed),
                 );
                 push_helper_sensor_if_available(
                     samples,
@@ -397,6 +400,7 @@ struct HardwareReading {
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
     disk_temperature: Option<f64>,
+    sensor_driver_installed: bool,
     message: String,
 }
 
@@ -412,6 +416,8 @@ struct HelperReading {
     gpu_temperature: Option<f64>,
     gpu_power: Option<f64>,
     disk_temperature: Option<f64>,
+    #[serde(default)]
+    sensor_driver_installed: bool,
     message: String,
 }
 
@@ -460,6 +466,7 @@ impl HardwareMonitorProvider {
             gpu_temperature: reading.gpu_temperature,
             gpu_power: reading.gpu_power,
             disk_temperature: reading.disk_temperature,
+            sensor_driver_installed: reading.sensor_driver_installed,
             message: reading.message,
         };
     }
@@ -644,6 +651,18 @@ fn push_optional_sensor(
             timestamp,
             fallback_message,
         )),
+    }
+}
+
+fn missing_cpu_sensor_message(label: &str, sensor_driver_installed: bool) -> String {
+    if sensor_driver_installed {
+        format!(
+            "{label} sensor not found. PawnIO is installed, but this hardware, firmware, or the current sensor library may not expose that reading."
+        )
+    } else {
+        format!(
+            "{label} sensor not found. Enable the integrated sensor driver if this hardware requires low-level access."
+        )
     }
 }
 

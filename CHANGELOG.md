@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Stopped prompting to install PawnIO again when the integrated sensor driver is already installed but CPU sensors remain unavailable.
+- Bumped the app version to 0.2.12.
 - Removed the Windows startup administrator requirement; only integrated sensor driver installation requests elevation.
 - Bumped the app version to 0.2.11.
 - Added a dashboard-level prompt to enable the integrated sensor driver when CPU temperature or power is unavailable.

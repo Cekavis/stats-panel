@@ -7,7 +7,7 @@ use preferences::{load_preferences, save_preferences_to_disk, UserPreferences, W
 use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::Mutex,
     thread,
     time::Duration,
@@ -99,14 +99,22 @@ fn install_integrated_sensor_driver(
     app: AppHandle,
     hardware_monitor: State<'_, HardwareMonitorProvider>,
 ) -> Result<String, String> {
-    install_integrated_sensor_driver_impl(&app)?;
+    let installed = install_integrated_sensor_driver_impl(&app)?;
     hardware_monitor.restart(&app);
 
-    Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
+    if installed {
+        Ok("Integrated sensor driver is already installed. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
+    } else {
+        Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string())
+    }
 }
 
 #[cfg(windows)]
-fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<(), String> {
+fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<bool, String> {
+    if is_pawnio_installed() {
+        return Ok(true);
+    }
+
     let installer = resolve_pawnio_installer(app)?;
     let script = "$ErrorActionPreference = 'Stop'; $installer = $env:STATS_PAWNIO_INSTALLER; $process = Start-Process -FilePath $installer -Verb RunAs -Wait -PassThru; exit $process.ExitCode";
     let status = Command::new("powershell")
@@ -124,7 +132,7 @@ fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<(), String> 
         })?;
 
     if status.success() {
-        Ok(())
+        Ok(false)
     } else {
         Err(format!(
             "Integrated sensor driver installer exited with code {:?}.",
@@ -134,8 +142,27 @@ fn install_integrated_sensor_driver_impl(app: &AppHandle) -> Result<(), String> 
 }
 
 #[cfg(not(windows))]
-fn install_integrated_sensor_driver_impl(_app: &AppHandle) -> Result<(), String> {
+fn install_integrated_sensor_driver_impl(_app: &AppHandle) -> Result<bool, String> {
     Err("The integrated sensor driver is only available on Windows.".to_string())
+}
+
+#[cfg(windows)]
+fn is_pawnio_installed() -> bool {
+    [
+        r"HKLM\SYSTEM\CurrentControlSet\Services\PawnIO",
+        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
+        r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
+    ]
+    .iter()
+    .any(|key| {
+        Command::new("reg")
+            .args(["query", key])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    })
 }
 
 fn resolve_pawnio_installer(app: &AppHandle) -> Result<PathBuf, String> {
