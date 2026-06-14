@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Replaced the default app icon with a flat Stats Panel hardware telemetry icon.
+- Bumped the app version to 0.2.21.
 - Added a settings toggle for launching Stats Panel automatically when Windows starts.
 - Bumped the app version to 0.2.20.
 - Added a Steam overlay-style per-core CPU usage bar row inside the CPU dashboard tile.
