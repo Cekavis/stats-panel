@@ -43,6 +43,6 @@ rtk cargo test
 
 ## Sensor Notes
 
-Windows exposes CPU usage, memory, network, and disk activity without special setup. CPU temperature, CPU power, and disk temperature usually require a hardware monitor provider. For those readings, run LibreHardwareMonitor or OpenHardwareMonitor with WMI enabled; administrator privileges may be required on some systems.
+Windows exposes CPU usage, memory, network, and disk activity without special setup. CPU temperature, CPU power, and disk temperature usually require a hardware monitor provider. Stats Panel can run normally without administrator privileges; only the integrated PawnIO sensor-driver installer requests elevation. Alternatively, run LibreHardwareMonitor or OpenHardwareMonitor with WMI enabled, where administrator privileges may be required on some systems.
 
 NVIDIA GPU metrics use NVML through the installed NVIDIA driver. Systems without NVML show GPU metrics as unavailable instead of using placeholder values.

@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Removed the Windows startup administrator requirement; only integrated sensor driver installation requests elevation.
+- Bumped the app version to 0.2.11.
 - Added a dashboard-level prompt to enable the integrated sensor driver when CPU temperature or power is unavailable.
 - Bumped the app version to 0.2.10.
 - Integrated a bundled sensor-driver setup path for CPU temperature and power readings on hardware that requires low-level access.
