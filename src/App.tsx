@@ -25,7 +25,7 @@ import type {
 } from "./types";
 import "./App.css";
 
-const HISTORY_MS = 30 * 1000;
+const DEFAULT_CHART_HISTORY_SECONDS = 60;
 
 type HistoryPoint = {
   timestamp: number;
@@ -125,7 +125,9 @@ function App() {
     async function bind() {
       unlisten = await listen<TelemetrySnapshot>("telemetry-sample", (event) => {
         setSnapshot(event.payload);
-        setHistory((current) => appendHistory(current, event.payload));
+        setHistory((current) =>
+          appendHistory(current, event.payload, preferences?.chartHistorySeconds ?? DEFAULT_CHART_HISTORY_SECONDS),
+        );
       });
     }
 
@@ -134,7 +136,7 @@ function App() {
     return () => {
       unlisten?.();
     };
-  }, []);
+  }, [preferences?.chartHistorySeconds]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -218,6 +220,13 @@ function App() {
     persist({ ...preferences, sampleIntervalMs });
   }
 
+  function updateChartHistory(chartHistorySeconds: number) {
+    if (!preferences) {
+      return;
+    }
+    persist({ ...preferences, chartHistorySeconds });
+  }
+
   function updateStartup(launchAtStartup: boolean) {
     if (!preferences) {
       return;
@@ -291,6 +300,7 @@ function App() {
         sensorDriverBusy={sensorDriverBusy}
         sensorNote={sensorNote}
         onCompactChange={(compact) => updateWindow("compact", compact)}
+        onChartHistoryChange={updateChartHistory}
         onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
         onSensorHelp={showSensorHelp}
@@ -380,6 +390,7 @@ function DashboardView({
                         metric={metric}
                         now={now}
                         points={history[metric.id] ?? []}
+                        seconds={preferences.chartHistorySeconds}
                         sample={sampleById.get(metric.id)}
                         showChart={charted.has(metric.id)}
                       />
@@ -394,6 +405,7 @@ function DashboardView({
                         label="Memory"
                         now={now}
                         points={history[metric.id] ?? []}
+                        seconds={preferences.chartHistorySeconds}
                         showChart={charted.has(metric.id)}
                         usageSample={sampleById.get("memory.usage")}
                         usedMetric={metricById.get("memory.used")}
@@ -410,6 +422,7 @@ function DashboardView({
                         label="VRAM"
                         now={now}
                         points={history[metric.id] ?? []}
+                        seconds={preferences.chartHistorySeconds}
                         showChart={charted.has(metric.id)}
                         usageSample={sampleById.get("gpu.memory_usage")}
                         usedMetric={metricById.get("gpu.memory_used")}
@@ -424,6 +437,7 @@ function DashboardView({
                       metric={metric}
                       now={now}
                       points={history[metric.id] ?? []}
+                      seconds={preferences.chartHistorySeconds}
                       sample={sampleById.get(metric.id)}
                       showChart={charted.has(metric.id)}
                     />
@@ -442,6 +456,7 @@ function CombinedMetricRow({
   label,
   now,
   points,
+  seconds,
   showChart,
   usageSample,
   usedMetric,
@@ -451,6 +466,7 @@ function CombinedMetricRow({
   label: string;
   now: number;
   points: HistoryPoint[];
+  seconds: number;
   showChart: boolean;
   usageSample: MetricSample | undefined;
   usedMetric: MetricDefinition | undefined;
@@ -469,7 +485,7 @@ function CombinedMetricRow({
           </em>
         </div>
       </div>
-      <AxisChart metric={chartMetric} now={now} points={showChart ? points : []} />
+      <AxisChart metric={chartMetric} now={now} points={showChart ? points : []} seconds={seconds} />
     </article>
   );
 }
@@ -500,6 +516,7 @@ function CpuUsageMetricRow({
   metric,
   now,
   points,
+  seconds,
   sample,
   showChart,
 }: {
@@ -507,6 +524,7 @@ function CpuUsageMetricRow({
   metric: MetricDefinition;
   now: number;
   points: HistoryPoint[];
+  seconds: number;
   sample: MetricSample | undefined;
   showChart: boolean;
 }) {
@@ -519,7 +537,7 @@ function CpuUsageMetricRow({
             {sample ? formatSample(sample, metric) : "--"}
           </strong>
         </div>
-        <AxisChart metric={metric} now={now} points={showChart ? points : []} />
+        <AxisChart metric={metric} now={now} points={showChart ? points : []} seconds={seconds} />
       </div>
       <CpuCoreBars coreUsages={coreUsages} />
     </article>
@@ -550,12 +568,14 @@ function MetricRow({
   metric,
   now,
   points,
+  seconds,
   sample,
   showChart,
 }: {
   metric: MetricDefinition;
   now: number;
   points: HistoryPoint[];
+  seconds: number;
   sample: MetricSample | undefined;
   showChart: boolean;
 }) {
@@ -567,7 +587,7 @@ function MetricRow({
           {sample ? formatSample(sample, metric) : "--"}
         </strong>
       </div>
-      <AxisChart metric={metric} now={now} points={showChart ? points : []} />
+      <AxisChart metric={metric} now={now} points={showChart ? points : []} seconds={seconds} />
     </article>
   );
 }
@@ -576,18 +596,21 @@ function AxisChart({
   metric,
   now,
   points,
+  seconds,
 }: {
   metric: MetricDefinition;
   now: number;
   points: HistoryPoint[];
+  seconds: number;
 }) {
   const domain = getChartDomain(metric, points);
-  const path = buildPath(points, now, domain);
+  const path = buildPath(points, now, domain, seconds * 1000);
   const topLabel = formatAxisValue(domain.max, metric);
   const bottomLabel = formatAxisValue(domain.min, metric);
+  const durationLabel = formatDurationLabel(seconds);
 
   return (
-    <svg className="axis-chart" viewBox="0 0 260 92" role="img" aria-label={`${metric.label} 30s trend`}>
+    <svg className="axis-chart" viewBox="0 0 260 92" role="img" aria-label={`${metric.label} ${durationLabel} trend`}>
       <path className="chart-axis" d="M38 12V68H246" />
       <path className="chart-gridline" d="M38 12H246" />
       <path className="chart-gridline" d="M38 40H246" />
@@ -599,7 +622,7 @@ function AxisChart({
         {bottomLabel}
       </text>
       <text className="axis-label axis-x-left" x="38" y="85">
-        30s
+        {durationLabel}
       </text>
       <text className="axis-label axis-x-right" x="225" y="85">
         now
@@ -617,6 +640,7 @@ function SettingsView({
   sensorDriverBusy,
   sensorNote,
   onCompactChange,
+  onChartHistoryChange,
   onEnableSensorDriver,
   onIntervalChange,
   onSensorHelp,
@@ -632,6 +656,7 @@ function SettingsView({
   sensorDriverBusy: boolean;
   sensorNote: string;
   onCompactChange: (value: boolean) => void;
+  onChartHistoryChange: (value: number) => void;
   onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
   onSensorHelp: () => void;
@@ -670,6 +695,19 @@ function SettingsView({
               type="range"
               value={preferences.sampleIntervalMs}
               onChange={(event) => onIntervalChange(Number(event.currentTarget.value))}
+            />
+          </label>
+
+          <label className="range-control">
+            <span>Chart window</span>
+            <strong>{preferences.chartHistorySeconds} s</strong>
+            <input
+              max="300"
+              min="10"
+              step="5"
+              type="range"
+              value={preferences.chartHistorySeconds}
+              onChange={(event) => onChartHistoryChange(Number(event.currentTarget.value))}
             />
           </label>
 
@@ -799,9 +837,14 @@ function clampPercent(value: number) {
   return Math.min(Math.max(value, 0), 100);
 }
 
-function appendHistory(current: History, snapshot: TelemetrySnapshot): History {
+function appendHistory(
+  current: History,
+  snapshot: TelemetrySnapshot,
+  chartHistorySeconds: number,
+): History {
   const next: History = { ...current };
-  const minTimestamp = snapshot.timestamp - HISTORY_MS;
+  const historyMs = chartHistorySeconds * 1000;
+  const minTimestamp = snapshot.timestamp - historyMs;
   const latestSamples = new Map<string, MetricSample>();
 
   for (const sample of snapshot.samples) {
@@ -825,7 +868,12 @@ function appendHistory(current: History, snapshot: TelemetrySnapshot): History {
   return next;
 }
 
-function buildPath(points: HistoryPoint[], now: number, domain: { min: number; max: number }) {
+function buildPath(
+  points: HistoryPoint[],
+  now: number,
+  domain: { min: number; max: number },
+  historyMs: number,
+) {
   if (points.length < 2) {
     return "";
   }
@@ -836,18 +884,26 @@ function buildPath(points: HistoryPoint[], now: number, domain: { min: number; m
     width: 208,
     height: 56,
   };
-  const minTime = now - HISTORY_MS;
+  const minTime = now - historyMs;
   const valueSpan = Math.max(domain.max - domain.min, 1);
 
   return points
     .filter((point) => point.timestamp >= minTime)
     .map((point, index) => {
-      const x = plot.x + ((point.timestamp - minTime) / HISTORY_MS) * plot.width;
+      const x = plot.x + ((point.timestamp - minTime) / historyMs) * plot.width;
       const clampedValue = Math.min(Math.max(point.value, domain.min), domain.max);
       const y = plot.y + plot.height - ((clampedValue - domain.min) / valueSpan) * plot.height;
       return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
     })
     .join(" ");
+}
+
+function formatDurationLabel(seconds: number) {
+  if (seconds >= 60 && seconds % 60 === 0) {
+    return `${seconds / 60}m`;
+  }
+
+  return `${seconds}s`;
 }
 
 function getChartDomain(metric: MetricDefinition, points: HistoryPoint[]) {

@@ -50,5 +50,6 @@ export type UserPreferences = {
   visibleMetricIds: string[];
   chartMetricIds: string[];
   sampleIntervalMs: number;
+  chartHistorySeconds: number;
   window: WindowPreferences;
 };

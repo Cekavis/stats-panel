@@ -573,6 +573,7 @@ fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
         preferences.metric_schema_version = 3;
     }
     preferences.sample_interval_ms = preferences.sample_interval_ms.clamp(500, 5_000);
+    preferences.chart_history_seconds = preferences.chart_history_seconds.clamp(10, 300);
     preferences.window = sanitize_window_preferences(preferences.window);
     preferences
 }

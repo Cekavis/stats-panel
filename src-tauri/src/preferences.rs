@@ -12,6 +12,8 @@ pub struct UserPreferences {
     pub visible_metric_ids: Vec<String>,
     pub chart_metric_ids: Vec<String>,
     pub sample_interval_ms: u64,
+    #[serde(default = "default_chart_history_seconds")]
+    pub chart_history_seconds: u64,
     pub window: WindowPreferences,
 }
 
@@ -71,9 +73,14 @@ impl Default for UserPreferences {
             .map(String::from)
             .collect(),
             sample_interval_ms: 1_000,
+            chart_history_seconds: default_chart_history_seconds(),
             window: WindowPreferences::default(),
         }
     }
+}
+
+fn default_chart_history_seconds() -> u64 {
+    60
 }
 
 impl Default for WindowPreferences {
@@ -134,6 +141,7 @@ mod tests {
             .visible_metric_ids
             .contains(&"disk.temperature".to_string()));
         assert_eq!(preferences.sample_interval_ms, 1_000);
+        assert_eq!(preferences.chart_history_seconds, 60);
         assert!(!preferences.launch_at_startup);
         assert_eq!(preferences.window.width, 1280.0);
     }
@@ -148,7 +156,35 @@ mod tests {
         assert!(json.contains("visibleMetricIds"));
         assert!(json.contains("metricSchemaVersion"));
         assert!(json.contains("launchAtStartup"));
+        assert!(json.contains("chartHistorySeconds"));
         assert_eq!(parsed.chart_metric_ids, preferences.chart_metric_ids);
+        assert_eq!(
+            parsed.chart_history_seconds,
+            preferences.chart_history_seconds
+        );
         assert_eq!(parsed.launch_at_startup, preferences.launch_at_startup);
+    }
+
+    #[test]
+    fn missing_chart_history_uses_default() {
+        let json = r#"{
+            "metricSchemaVersion": 3,
+            "launchAtStartup": false,
+            "visibleMetricIds": ["cpu.usage"],
+            "chartMetricIds": ["cpu.usage"],
+            "sampleIntervalMs": 1000,
+            "window": {
+                "width": 1280.0,
+                "height": 2160.0,
+                "x": null,
+                "y": null,
+                "alwaysOnTop": false,
+                "compact": false
+            }
+        }"#;
+        let parsed: UserPreferences =
+            serde_json::from_str(json).expect("old preferences should deserialize");
+
+        assert_eq!(parsed.chart_history_seconds, 60);
     }
 }
