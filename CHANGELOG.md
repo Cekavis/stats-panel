@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Made the app icon background transparent and enlarged the telemetry mark.
+- Bumped the app version to 0.2.23.
 - Added a configurable chart history window, defaulting the dashboard line charts to 60 seconds.
 - Bumped the app version to 0.2.22.
 - Replaced the default app icon with a flat Stats Panel hardware telemetry icon.
