@@ -14,6 +14,13 @@ export type CpuCoreUsage = {
   value: number;
 };
 
+const CHART_PLOT = {
+  x: 38,
+  y: 12,
+  width: 208,
+  height: 56,
+};
+
 export function pairedMetricId(id: string) {
   if (id === "memory.usage") {
     return "memory.used";
@@ -93,28 +100,57 @@ export function buildPath(
   domain: { min: number; max: number },
   historyMs: number,
 ) {
-  if (points.length < 2) {
+  const plotPoints = buildPlotPoints(points, now, domain, historyMs);
+  if (plotPoints.length < 2) {
     return "";
   }
 
-  const plot = {
-    x: 38,
-    y: 12,
-    width: 208,
-    height: 56,
-  };
+  return plotPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join(" ");
+}
+
+export function buildAreaPath(
+  points: HistoryPoint[],
+  now: number,
+  domain: { min: number; max: number },
+  historyMs: number,
+) {
+  const plotPoints = buildPlotPoints(points, now, domain, historyMs);
+  if (plotPoints.length < 2) {
+    return "";
+  }
+
+  const baseline = CHART_PLOT.y + CHART_PLOT.height;
+  const firstPoint = plotPoints[0];
+  const lastPoint = plotPoints[plotPoints.length - 1];
+  const line = plotPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join(" ");
+
+  return `${line} L${lastPoint.x} ${baseline} L${firstPoint.x} ${baseline} Z`;
+}
+
+function buildPlotPoints(
+  points: HistoryPoint[],
+  now: number,
+  domain: { min: number; max: number },
+  historyMs: number,
+) {
   const minTime = now - historyMs;
   const valueSpan = Math.max(domain.max - domain.min, 1);
 
   return points
     .filter((point) => point.timestamp >= minTime)
-    .map((point, index) => {
-      const x = plot.x + ((point.timestamp - minTime) / historyMs) * plot.width;
+    .map((point) => {
+      const x = CHART_PLOT.x + ((point.timestamp - minTime) / historyMs) * CHART_PLOT.width;
       const clampedValue = Math.min(Math.max(point.value, domain.min), domain.max);
-      const y = plot.y + plot.height - ((clampedValue - domain.min) / valueSpan) * plot.height;
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
+      const y =
+        CHART_PLOT.y +
+        CHART_PLOT.height -
+        ((clampedValue - domain.min) / valueSpan) * CHART_PLOT.height;
+      return { x: x.toFixed(1), y: y.toFixed(1) };
+    });
 }
 
 export function formatDurationLabel(seconds: number) {

@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { Checkbox, Slider, Switch, ToggleGroup, Tooltip } from "radix-ui";
+import { Checkbox, Switch, ToggleGroup, Tooltip } from "radix-ui";
 import type { AppearancePreference } from "../types";
 
 type SwitchControlProps = {
@@ -25,50 +25,105 @@ export function SwitchControl({ checked, label, onCheckedChange }: SwitchControl
   );
 }
 
-type RangeControlProps = {
+type NumberPreset = {
+  label: string;
+  value: number;
+};
+
+type SegmentedNumberControlProps = {
   label: string;
   max: number;
   min: number;
   onValueChange: (value: number) => void;
+  presets: NumberPreset[];
   step: number;
   suffix: string;
   value: number;
 };
 
-export function RangeControl({
+export function SegmentedNumberControl({
   label,
   max,
   min,
   onValueChange,
+  presets,
   step,
   suffix,
   value,
-}: RangeControlProps) {
+}: SegmentedNumberControlProps) {
+  const [customValue, setCustomValue] = useState(String(value));
+  const selectedPreset = presets.find((preset) => preset.value === value)?.value.toString() ?? "";
+
+  useEffect(() => {
+    setCustomValue(String(value));
+  }, [value]);
+
+  function commitCustomValue() {
+    const parsed = Number(customValue);
+    if (!Number.isFinite(parsed)) {
+      setCustomValue(String(value));
+      return;
+    }
+
+    const nextValue = Math.round(Math.min(Math.max(parsed, min), max));
+    setCustomValue(String(nextValue));
+    if (nextValue !== value) {
+      onValueChange(nextValue);
+    }
+  }
+
   return (
-    <div className="range-control">
+    <div className="segmented-number-control">
       <span>{label}</span>
       <strong>
         {value} {suffix}
       </strong>
-      <Slider.Root
+      <ToggleGroup.Root
         aria-label={label}
-        className="ui-slider"
-        max={max}
-        min={min}
-        step={step}
-        value={[value]}
+        className="number-preset-toggle"
+        type="single"
+        value={selectedPreset}
         onValueChange={(nextValue) => {
-          const [next] = nextValue;
-          if (typeof next === "number") {
-            onValueChange(next);
+          const parsed = Number(nextValue);
+          if (Number.isFinite(parsed)) {
+            onValueChange(parsed);
           }
         }}
       >
-        <Slider.Track className="ui-slider-track">
-          <Slider.Range className="ui-slider-range" />
-        </Slider.Track>
-        <Slider.Thumb className="ui-slider-thumb" />
-      </Slider.Root>
+        {presets.map((preset) => (
+          <ToggleGroup.Item
+            className="number-preset-item"
+            key={preset.value}
+            value={preset.value.toString()}
+          >
+            {preset.label}
+          </ToggleGroup.Item>
+        ))}
+      </ToggleGroup.Root>
+      <label className="custom-number-control">
+        <span>Custom</span>
+        <input
+          aria-label={`${label} custom value`}
+          inputMode="numeric"
+          max={max}
+          min={min}
+          step={step}
+          type="number"
+          value={customValue}
+          onBlur={commitCustomValue}
+          onChange={(event) => setCustomValue(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.currentTarget.blur();
+            }
+            if (event.key === "Escape") {
+              setCustomValue(String(value));
+              event.currentTarget.blur();
+            }
+          }}
+        />
+        <em>{suffix}</em>
+      </label>
     </div>
   );
 }

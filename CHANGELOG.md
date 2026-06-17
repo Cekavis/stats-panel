@@ -4,6 +4,10 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Improved chart axis label readability and CPU per-core usage rail contrast.
+- Reworked settings into tabbed sections with grouped metric controls.
+- Replaced timing sliders with preset and custom controls for sampling and chart history.
+- Bumped the app version to 0.2.25.
 - Redesigned the dashboard and settings UI around a Notion-inspired token system with Radix primitive controls.
 - Added Light, Dark, and Auto appearance settings, with Auto following the system color scheme.
 - Fixed Celsius unit rendering in metric values and chart axes.

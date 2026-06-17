@@ -1,6 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import { DASHBOARD_GROUPS } from "../dashboardGroups";
 import {
+  buildAreaPath,
   buildPath,
   clampPercent,
   formatAxisValue,
@@ -289,6 +290,7 @@ function AxisChart({
 }) {
   const domain = getChartDomain(metric, points);
   const path = buildPath(points, now, domain, seconds * 1000);
+  const areaPath = buildAreaPath(points, now, domain, seconds * 1000);
   const topLabel = formatAxisValue(domain.max, metric);
   const bottomLabel = formatAxisValue(domain.min, metric);
   const durationLabel = formatDurationLabel(seconds);
@@ -300,6 +302,7 @@ function AxisChart({
       role="img"
       viewBox="0 0 260 92"
     >
+      {areaPath ? <path className={`chart-area category-${metric.category}`} d={areaPath} /> : null}
       <path className="chart-axis" d="M38 12V68H246" />
       <path className="chart-gridline" d="M38 12H246" />
       <path className="chart-gridline" d="M38 40H246" />

@@ -17,6 +17,7 @@ Status: complete
 - Preferences persist visible metrics, chart metrics, sampling interval, and window behavior.
 - React dashboard renders real-time cards, mini line charts, provider status, and settings.
 - Frontend UI uses a local Notion-inspired design contract with Radix primitive controls.
+- Settings are organized into focused tabs with grouped metric controls.
 
 ## Phase 2 - Hardware Sensors
 

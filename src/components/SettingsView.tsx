@@ -5,6 +5,8 @@ import {
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
+import { Tabs } from "radix-ui";
+import { DASHBOARD_GROUPS } from "../dashboardGroups";
 import { needsIntegratedSensorDriver } from "../metrics";
 import type {
   AppearancePreference,
@@ -16,7 +18,7 @@ import type {
 import {
   AppearanceToggle,
   MetricCheckbox,
-  RangeControl,
+  SegmentedNumberControl,
   SwitchControl,
   TooltipButton,
   TooltipProvider,
@@ -41,6 +43,20 @@ type SettingsViewProps = {
   sensorNote: string;
 };
 
+const SAMPLING_PRESETS = [
+  { label: "500 ms", value: 500 },
+  { label: "1 s", value: 1000 },
+  { label: "2 s", value: 2000 },
+  { label: "5 s", value: 5000 },
+];
+
+const CHART_WINDOW_PRESETS = [
+  { label: "30 s", value: 30 },
+  { label: "1 m", value: 60 },
+  { label: "2 m", value: 120 },
+  { label: "5 m", value: 300 },
+];
+
 export function SettingsView({
   manifest,
   onAppearanceChange,
@@ -62,6 +78,7 @@ export function SettingsView({
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
   const needsSensorDriver = needsIntegratedSensorDriver(samples);
+  const metricsByGroup = getSettingsMetricGroups(manifest);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -74,134 +91,208 @@ export function SettingsView({
           <SlidersHorizontal size={21} />
         </header>
 
-        <section className="settings-content">
-          <section className="settings-section">
-            <div className="settings-section-heading">
-              <Gauge size={18} />
-              <h2>Panel</h2>
-            </div>
+        <Tabs.Root className="settings-tabs" defaultValue="panel">
+          <Tabs.List aria-label="Settings sections" className="settings-tab-list">
+            <Tabs.Trigger className="settings-tab-trigger" value="panel">
+              <Gauge size={15} />
+              <span>Panel</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger className="settings-tab-trigger" value="metrics">
+              <ChartNoAxesCombined size={15} />
+              <span>Metrics</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger className="settings-tab-trigger" value="sources">
+              <MonitorCog size={15} />
+              <span>Data Sources</span>
+            </Tabs.Trigger>
+          </Tabs.List>
 
-            <AppearanceToggle
-              value={preferences.appearance}
-              onValueChange={onAppearanceChange}
-            />
-
-            <RangeControl
-              label="Sampling"
-              max={5000}
-              min={500}
-              step={500}
-              suffix="ms"
-              value={preferences.sampleIntervalMs}
-              onValueChange={onIntervalChange}
-            />
-
-            <RangeControl
-              label="Chart window"
-              max={300}
-              min={10}
-              step={5}
-              suffix="s"
-              value={preferences.chartHistorySeconds}
-              onValueChange={onChartHistoryChange}
-            />
-
-            <SwitchControl
-              checked={preferences.window.compact}
-              label="Compact rows"
-              onCheckedChange={onCompactChange}
-            />
-            <SwitchControl
-              checked={preferences.window.alwaysOnTop}
-              label="Always on top"
-              onCheckedChange={onTopChange}
-            />
-            <SwitchControl
-              checked={preferences.launchAtStartup}
-              label="Launch at Windows startup"
-              onCheckedChange={onStartupChange}
-            />
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-heading">
-              <ChartNoAxesCombined size={18} />
-              <h2>Metrics</h2>
-            </div>
-            <div className="metric-toggle-list">
-              {manifest.map((metric) => {
-                const isVisible = visible.has(metric.id);
-                const isCharted = charted.has(metric.id);
-                const chartDisabled = !isVisible || !metric.supportsChart;
-
-                return (
-                  <div className="metric-toggle-row" key={metric.id}>
-                    <MetricCheckbox
-                      checked={isVisible}
-                      label={`Show ${metric.label}`}
-                      onCheckedChange={() => onToggleVisible(metric.id)}
-                    />
-                    <span>{metric.label}</span>
-                    <TooltipButton
-                      className={isCharted ? "chart-toggle is-on" : "chart-toggle"}
-                      disabled={chartDisabled}
-                      label={`Chart ${metric.label}`}
-                      pressed={isCharted}
-                      onClick={() => onToggleChart(metric.id)}
-                    >
-                      <ChartNoAxesCombined size={15} />
-                    </TooltipButton>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-heading">
-              <MonitorCog size={18} />
-              <h2>Data Sources</h2>
-            </div>
-            <div className="provider-list">
-              {needsSensorDriver ? (
-                <div className="sensor-driver-notice">
-                  <ShieldCheck size={16} />
-                  <span>CPU temperature and power need the integrated sensor driver.</span>
+          <section className="settings-content">
+            <Tabs.Content className="settings-tab-panel" value="panel">
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <Gauge size={18} />
+                  <h2>Panel</h2>
                 </div>
-              ) : null}
-              {providers.length === 0 ? (
-                <p className="muted-copy">Waiting for telemetry providers...</p>
-              ) : (
-                providers.map((provider) => (
-                  <div className="provider-row" key={provider.id}>
-                    <span className={provider.available ? "status-pill is-online" : "status-pill"}>
-                      {provider.available ? "Online" : "Offline"}
-                    </span>
-                    <div>
-                      <strong>{provider.label}</strong>
-                      <p>{provider.message}</p>
+
+                <div className="settings-subsection">
+                  <AppearanceToggle
+                    value={preferences.appearance}
+                    onValueChange={onAppearanceChange}
+                  />
+                  <SwitchControl
+                    checked={preferences.window.compact}
+                    label="Compact rows"
+                    onCheckedChange={onCompactChange}
+                  />
+                  <SwitchControl
+                    checked={preferences.window.alwaysOnTop}
+                    label="Always on top"
+                    onCheckedChange={onTopChange}
+                  />
+                  <SwitchControl
+                    checked={preferences.launchAtStartup}
+                    label="Launch at Windows startup"
+                    onCheckedChange={onStartupChange}
+                  />
+                </div>
+
+                <div className="settings-subsection">
+                  <SegmentedNumberControl
+                    label="Sampling"
+                    max={5000}
+                    min={500}
+                    presets={SAMPLING_PRESETS}
+                    step={500}
+                    suffix="ms"
+                    value={preferences.sampleIntervalMs}
+                    onValueChange={onIntervalChange}
+                  />
+
+                  <SegmentedNumberControl
+                    label="Chart window"
+                    max={300}
+                    min={10}
+                    presets={CHART_WINDOW_PRESETS}
+                    step={5}
+                    suffix="s"
+                    value={preferences.chartHistorySeconds}
+                    onValueChange={onChartHistoryChange}
+                  />
+                </div>
+              </section>
+            </Tabs.Content>
+
+            <Tabs.Content className="settings-tab-panel" value="metrics">
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <ChartNoAxesCombined size={18} />
+                  <h2>Metrics</h2>
+                </div>
+                <div className="settings-metric-groups">
+                  {metricsByGroup.map((group) => (
+                    <section className="settings-metric-group" key={group.id}>
+                      <div className="settings-metric-group-heading">
+                        <h3>{group.title}</h3>
+                        <span>
+                          {group.metrics.filter((metric) => visible.has(metric.id)).length} shown
+                        </span>
+                      </div>
+                      <div className="metric-toggle-list">
+                        {group.metrics.map((metric) => {
+                          const isVisible = visible.has(metric.id);
+                          const isCharted = charted.has(metric.id);
+                          const chartDisabled = !isVisible || !metric.supportsChart;
+
+                          return (
+                            <div className="metric-toggle-row" key={metric.id}>
+                              <MetricCheckbox
+                                checked={isVisible}
+                                label={`Show ${metric.label}`}
+                                onCheckedChange={() => onToggleVisible(metric.id)}
+                              />
+                              <span>{metric.label}</span>
+                              <TooltipButton
+                                className={isCharted ? "chart-toggle is-on" : "chart-toggle"}
+                                disabled={chartDisabled}
+                                label={`Chart ${metric.label}`}
+                                pressed={isCharted}
+                                onClick={() => onToggleChart(metric.id)}
+                              >
+                                <ChartNoAxesCombined size={15} />
+                              </TooltipButton>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </section>
+            </Tabs.Content>
+
+            <Tabs.Content className="settings-tab-panel" value="sources">
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <MonitorCog size={18} />
+                  <h2>Data Sources</h2>
+                </div>
+                <div className="provider-list">
+                  {needsSensorDriver ? (
+                    <div className="sensor-driver-notice">
+                      <ShieldCheck size={16} />
+                      <span>CPU temperature and power need the integrated sensor driver.</span>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="sensor-actions">
-              <button className="text-button" type="button" onClick={onSensorHelp}>
-                Sensor access
-              </button>
-              <button
-                className="text-button"
-                disabled={sensorDriverBusy}
-                type="button"
-                onClick={onEnableSensorDriver}
-              >
-                {sensorDriverBusy ? "Opening installer..." : "Enable integrated sensor driver"}
-              </button>
-            </div>
-            {sensorNote ? <p className="muted-copy">{sensorNote}</p> : null}
+                  ) : null}
+                  {providers.length === 0 ? (
+                    <p className="muted-copy">Waiting for telemetry providers...</p>
+                  ) : (
+                    providers.map((provider) => (
+                      <div className="provider-row" key={provider.id}>
+                        <span
+                          className={provider.available ? "status-pill is-online" : "status-pill"}
+                        >
+                          {provider.available ? "Online" : "Offline"}
+                        </span>
+                        <div>
+                          <strong>{provider.label}</strong>
+                          <p>{provider.message}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="sensor-actions">
+                  <button className="text-button" type="button" onClick={onSensorHelp}>
+                    Sensor access
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={sensorDriverBusy}
+                    type="button"
+                    onClick={onEnableSensorDriver}
+                  >
+                    {sensorDriverBusy ? "Opening installer..." : "Enable integrated sensor driver"}
+                  </button>
+                </div>
+                {sensorNote ? <p className="muted-copy">{sensorNote}</p> : null}
+              </section>
+            </Tabs.Content>
           </section>
-        </section>
+        </Tabs.Root>
       </main>
     </TooltipProvider>
   );
+}
+
+function getSettingsMetricGroups(manifest: MetricDefinition[]) {
+  const manifestById = new Map(manifest.map((metric) => [metric.id, metric]));
+  const groupedIds = new Set<string>();
+  const groups = DASHBOARD_GROUPS.map((group) => {
+    const metrics = group.metricIds.flatMap((id) => {
+      const metric = manifestById.get(id);
+      if (!metric) {
+        return [];
+      }
+      groupedIds.add(id);
+      return [metric];
+    });
+
+    return {
+      id: group.id,
+      metrics,
+      title: group.title,
+    };
+  }).filter((group) => group.metrics.length > 0);
+
+  const remainingMetrics = manifest.filter((metric) => !groupedIds.has(metric.id));
+  if (remainingMetrics.length > 0) {
+    groups.push({
+      id: "other",
+      metrics: remainingMetrics,
+      title: "Other",
+    });
+  }
+
+  return groups;
 }
