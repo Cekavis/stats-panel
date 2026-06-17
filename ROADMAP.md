@@ -16,6 +16,7 @@ Status: complete
 - `sysinfo` provider covers CPU usage/frequency, memory, network, and disk speeds.
 - Preferences persist visible metrics, chart metrics, sampling interval, and window behavior.
 - React dashboard renders real-time cards, mini line charts, provider status, and settings.
+- Frontend UI uses a local Notion-inspired design contract with Radix primitive controls.
 
 ## Phase 2 - Hardware Sensors
 
@@ -31,6 +32,7 @@ Status: complete
 
 - Borderless compact display panel with drag-region support.
 - Always-on-top toggle.
+- Light, dark, and system appearance modes.
 - Window geometry persistence.
 - Tray menu for restoring or quitting the app.
 

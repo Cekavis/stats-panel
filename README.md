@@ -8,8 +8,9 @@ Stats Panel is a compact Windows performance monitor built for a fixed region on
 - NVIDIA GPU telemetry through NVML when an NVIDIA driver is available.
 - CPU temperature, CPU power, CPU/GPU fan speed, and disk temperature sensor bridge via LibreHardwareMonitor/OpenHardwareMonitor WMI when available.
 - Custom visible metrics and chart metrics.
+- Notion-inspired Light, Dark, and Auto appearance modes.
 - Compact, borderless, resizable widget window with always-on-top support.
-- Preferences stored locally in the Tauri app config directory.
+- Preferences stored locally in the Tauri app config directory, including window behavior and appearance.
 - Tray menu with show and quit actions.
 
 ## Development

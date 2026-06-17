@@ -4,6 +4,10 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Redesigned the dashboard and settings UI around a Notion-inspired token system with Radix primitive controls.
+- Added Light, Dark, and Auto appearance settings, with Auto following the system color scheme.
+- Fixed Celsius unit rendering in metric values and chart axes.
+- Bumped the app version to 0.2.24.
 - Made the app icon background transparent and enlarged the telemetry mark.
 - Bumped the app version to 0.2.23.
 - Added a configurable chart history window, defaulting the dashboard line charts to 60 seconds.

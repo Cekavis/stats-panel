@@ -8,6 +8,8 @@ pub struct UserPreferences {
     #[serde(default)]
     pub metric_schema_version: u32,
     #[serde(default)]
+    pub appearance: AppearancePreference,
+    #[serde(default)]
     pub launch_at_startup: bool,
     pub visible_metric_ids: Vec<String>,
     pub chart_metric_ids: Vec<String>,
@@ -15,6 +17,15 @@ pub struct UserPreferences {
     #[serde(default = "default_chart_history_seconds")]
     pub chart_history_seconds: u64,
     pub window: WindowPreferences,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppearancePreference {
+    Light,
+    Dark,
+    #[default]
+    System,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,6 +43,7 @@ impl Default for UserPreferences {
     fn default() -> Self {
         Self {
             metric_schema_version: 3,
+            appearance: AppearancePreference::System,
             launch_at_startup: false,
             visible_metric_ids: vec![
                 "cpu.usage",
@@ -142,6 +154,7 @@ mod tests {
             .contains(&"disk.temperature".to_string()));
         assert_eq!(preferences.sample_interval_ms, 1_000);
         assert_eq!(preferences.chart_history_seconds, 60);
+        assert_eq!(preferences.appearance, AppearancePreference::System);
         assert!(!preferences.launch_at_startup);
         assert_eq!(preferences.window.width, 1280.0);
     }
@@ -155,9 +168,11 @@ mod tests {
 
         assert!(json.contains("visibleMetricIds"));
         assert!(json.contains("metricSchemaVersion"));
+        assert!(json.contains(r#""appearance":"system""#));
         assert!(json.contains("launchAtStartup"));
         assert!(json.contains("chartHistorySeconds"));
         assert_eq!(parsed.chart_metric_ids, preferences.chart_metric_ids);
+        assert_eq!(parsed.appearance, AppearancePreference::System);
         assert_eq!(
             parsed.chart_history_seconds,
             preferences.chart_history_seconds
@@ -166,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_chart_history_uses_default() {
+    fn missing_optional_preferences_use_defaults() {
         let json = r#"{
             "metricSchemaVersion": 3,
             "launchAtStartup": false,
@@ -186,5 +201,6 @@ mod tests {
             serde_json::from_str(json).expect("old preferences should deserialize");
 
         assert_eq!(parsed.chart_history_seconds, 60);
+        assert_eq!(parsed.appearance, AppearancePreference::System);
     }
 }

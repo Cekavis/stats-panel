@@ -29,6 +29,10 @@ export type ProviderStatus = {
   message: string;
 };
 
+export type AppearancePreference = "light" | "dark" | "system";
+
+export type ResolvedAppearance = "light" | "dark";
+
 export type TelemetrySnapshot = {
   timestamp: number;
   samples: MetricSample[];
@@ -46,6 +50,7 @@ export type WindowPreferences = {
 
 export type UserPreferences = {
   metricSchemaVersion: number;
+  appearance: AppearancePreference;
   launchAtStartup: boolean;
   visibleMetricIds: string[];
   chartMetricIds: string[];
