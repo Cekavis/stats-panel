@@ -13,7 +13,7 @@ import {
   pairedMetricId,
 } from "../metrics";
 import type { CpuCoreUsage, History, HistoryPoint } from "../metrics";
-import type { MetricDefinition, MetricSample, UserPreferences } from "../types";
+import type { MetricCategory, MetricDefinition, MetricSample, UserPreferences } from "../types";
 
 type DashboardViewProps = {
   history: History;
@@ -60,8 +60,12 @@ export function DashboardView({
 
       <section className="dashboard-grid" aria-label="Stats dashboard" data-tauri-drag-region>
         {DASHBOARD_GROUPS.map((group) => (
-          <section className="metric-group" key={group.id} data-tauri-drag-region>
-            <h2 data-tauri-drag-region>{group.title}</h2>
+          <section
+            aria-label={group.title}
+            className="metric-group"
+            key={group.id}
+            data-tauri-drag-region
+          >
             <div className="metric-list" data-tauri-drag-region>
               {group.metricIds
                 .filter((id) => {
@@ -120,6 +124,7 @@ export function DashboardView({
                         points={history[metric.id] ?? []}
                         seconds={preferences.chartHistorySeconds}
                         showChart={charted.has(metric.id)}
+                        toneCategory="memory"
                         usageSample={sampleById.get("gpu.memory_usage")}
                         usedMetric={metricById.get("gpu.memory_used")}
                         usedSample={sampleById.get("gpu.memory_used")}
@@ -154,6 +159,7 @@ function CombinedMetricRow({
   points,
   seconds,
   showChart,
+  toneCategory,
   usageSample,
   usedMetric,
   usedSample,
@@ -164,12 +170,15 @@ function CombinedMetricRow({
   points: HistoryPoint[];
   seconds: number;
   showChart: boolean;
+  toneCategory?: MetricCategory;
   usageSample: MetricSample | undefined;
   usedMetric: MetricDefinition | undefined;
   usedSample: MetricSample | undefined;
 }) {
+  const category = toneCategory ?? chartMetric.category;
+
   return (
-    <article className={`metric-row metric-row-${chartMetric.category}`} data-tauri-drag-region>
+    <article className={`metric-row metric-row-${category}`} data-tauri-drag-region>
       <div className="metric-value" data-tauri-drag-region>
         <span data-tauri-drag-region>{label}</span>
         <div className="paired-values" data-tauri-drag-region>
@@ -187,7 +196,13 @@ function CombinedMetricRow({
           </em>
         </div>
       </div>
-      <AxisChart metric={chartMetric} now={now} points={showChart ? points : []} seconds={seconds} />
+      <AxisChart
+        metric={chartMetric}
+        now={now}
+        points={showChart ? points : []}
+        seconds={seconds}
+        toneCategory={category}
+      />
     </article>
   );
 }
@@ -282,11 +297,13 @@ function AxisChart({
   now,
   points,
   seconds,
+  toneCategory,
 }: {
   metric: MetricDefinition;
   now: number;
   points: HistoryPoint[];
   seconds: number;
+  toneCategory?: MetricCategory;
 }) {
   const domain = getChartDomain(metric, points);
   const path = buildPath(points, now, domain, seconds * 1000);
@@ -294,6 +311,7 @@ function AxisChart({
   const topLabel = formatAxisValue(domain.max, metric);
   const bottomLabel = formatAxisValue(domain.min, metric);
   const durationLabel = formatDurationLabel(seconds);
+  const category = toneCategory ?? metric.category;
 
   return (
     <svg
@@ -302,24 +320,18 @@ function AxisChart({
       role="img"
       viewBox="0 0 260 92"
     >
-      {areaPath ? <path className={`chart-area category-${metric.category}`} d={areaPath} /> : null}
-      <path className="chart-axis" d="M38 12V68H246" />
-      <path className="chart-gridline" d="M38 12H246" />
-      <path className="chart-gridline" d="M38 40H246" />
-      <path className="chart-gridline" d="M38 68H246" />
-      <text className="axis-label axis-y-top" x="4" y="15">
+      {areaPath ? <path className={`chart-area category-${category}`} d={areaPath} /> : null}
+      <path className="chart-axis" d="M12 18V78H250" />
+      <path className="chart-gridline" d="M12 18H250" />
+      <path className="chart-gridline" d="M12 48H250" />
+      <path className="chart-gridline" d="M12 78H250" />
+      <text className="axis-label axis-y-top" x="12" y="12">
         {topLabel}
       </text>
-      <text className="axis-label axis-y-bottom" x="4" y="71">
+      <text className="axis-label axis-y-bottom" x="12" y="90">
         {bottomLabel}
       </text>
-      <text className="axis-label axis-x-left" x="38" y="85">
-        {durationLabel}
-      </text>
-      <text className="axis-label axis-x-right" x="225" y="85">
-        now
-      </text>
-      {path ? <path className={`chart-line category-${metric.category}`} d={path} /> : null}
+      {path ? <path className={`chart-line category-${category}`} d={path} /> : null}
     </svg>
   );
 }

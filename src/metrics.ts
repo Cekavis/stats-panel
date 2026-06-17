@@ -15,10 +15,10 @@ export type CpuCoreUsage = {
 };
 
 const CHART_PLOT = {
-  x: 38,
-  y: 12,
-  width: 208,
-  height: 56,
+  x: 12,
+  y: 18,
+  width: 238,
+  height: 60,
 };
 
 export function pairedMetricId(id: string) {
@@ -206,7 +206,7 @@ export function formatBytes(value: number) {
     unitIndex += 1;
   }
 
-  return `${scaled.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+  return `${scaled.toFixed(unitIndex === 0 || scaled >= 100 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function formatUnit(unit: string) {

@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Tightened the dashboard layout by removing visible column headings, grouping Memory and VRAM at the top of the third column, expanding chart space, and simplifying large throughput values.
+- Bumped the app version to 0.2.26.
 - Improved chart axis label readability and CPU per-core usage rail contrast.
 - Reworked settings into tabbed sections with grouped metric controls.
 - Replaced timing sliders with preset and custom controls for sampling and chart history.

@@ -1,6 +1,6 @@
 [package]
 name = "stats-panel"
-version = "0.2.25"
+version = "0.2.26"
 description = "A compact Windows performance monitor for a secondary display."
 authors = ["cekav"]
 edition = "2021"

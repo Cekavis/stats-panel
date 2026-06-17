@@ -7,20 +7,18 @@ export type MetricGroup = {
 export const DASHBOARD_GROUPS: MetricGroup[] = [
   {
     id: "system",
-    title: "CPU / Memory",
+    title: "CPU",
     metricIds: [
       "cpu.usage",
       "cpu.frequency",
       "cpu.temperature",
       "cpu.power",
       "cpu.fan_speed",
-      "memory.usage",
-      "memory.used",
     ],
   },
   {
     id: "graphics",
-    title: "GPU / VRAM",
+    title: "GPU",
     metricIds: [
       "gpu.usage",
       "gpu.core_clock",
@@ -28,14 +26,16 @@ export const DASHBOARD_GROUPS: MetricGroup[] = [
       "gpu.temperature",
       "gpu.power",
       "gpu.fan_speed",
-      "gpu.memory_usage",
-      "gpu.memory_used",
     ],
   },
   {
     id: "throughput",
-    title: "Network / Disk",
+    title: "Memory / VRAM / Network / Disk",
     metricIds: [
+      "memory.usage",
+      "memory.used",
+      "gpu.memory_usage",
+      "gpu.memory_used",
       "network.download",
       "network.upload",
       "disk.read",
