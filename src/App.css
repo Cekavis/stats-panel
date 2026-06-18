@@ -346,6 +346,31 @@ button:focus-visible,
   overflow: visible;
 }
 
+@media (min-width: 1180px) and (min-height: 760px) {
+  .dashboard-shell:not(.is-compact) .metric-group-system .metric-row:not(.metric-row-cpu-usage),
+  .dashboard-shell:not(.is-compact) .metric-group-graphics .metric-row,
+  .dashboard-shell:not(.is-compact) .metric-group-system .metric-row-main,
+  .dashboard-shell:not(.is-compact) .metric-group-graphics .metric-row-main {
+    grid-template-columns: minmax(104px, 0.64fr) minmax(220px, 1.95fr);
+  }
+
+  .dashboard-shell:not(.is-compact) .metric-group-system .metric-row-cpu-usage {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 0.95fr) minmax(82px, 0.9fr);
+  }
+
+  .dashboard-shell:not(.is-compact) .metric-group-system .axis-chart,
+  .dashboard-shell:not(.is-compact) .metric-group-graphics .axis-chart {
+    min-height: 88px;
+    max-height: 184px;
+  }
+
+  .dashboard-shell:not(.is-compact) .metric-group-system .cpu-core-bars {
+    min-height: 102px;
+    padding: 8px;
+  }
+}
+
 .chart-axis,
 .chart-area,
 .chart-gridline,

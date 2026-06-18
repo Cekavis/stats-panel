@@ -16,9 +16,9 @@ export type CpuCoreUsage = {
 
 const CHART_PLOT = {
   x: 12,
-  y: 18,
-  width: 238,
-  height: 60,
+  y: 20,
+  width: 276,
+  height: 76,
 };
 
 export function pairedMetricId(id: string) {

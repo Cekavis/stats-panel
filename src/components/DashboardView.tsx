@@ -62,7 +62,7 @@ export function DashboardView({
         {DASHBOARD_GROUPS.map((group) => (
           <section
             aria-label={group.title}
-            className="metric-group"
+            className={`metric-group metric-group-${group.id}`}
             key={group.id}
             data-tauri-drag-region
           >
@@ -318,17 +318,17 @@ function AxisChart({
       aria-label={`${metric.label} ${durationLabel} trend`}
       className="axis-chart"
       role="img"
-      viewBox="0 0 260 92"
+      viewBox="0 0 300 116"
     >
       {areaPath ? <path className={`chart-area category-${category}`} d={areaPath} /> : null}
-      <path className="chart-axis" d="M12 18V78H250" />
-      <path className="chart-gridline" d="M12 18H250" />
-      <path className="chart-gridline" d="M12 48H250" />
-      <path className="chart-gridline" d="M12 78H250" />
-      <text className="axis-label axis-y-top" x="12" y="12">
+      <path className="chart-axis" d="M12 20V96H288" />
+      <path className="chart-gridline" d="M12 20H288" />
+      <path className="chart-gridline" d="M12 58H288" />
+      <path className="chart-gridline" d="M12 96H288" />
+      <text className="axis-label axis-y-top" x="12" y="14">
         {topLabel}
       </text>
-      <text className="axis-label axis-y-bottom" x="12" y="90">
+      <text className="axis-label axis-y-bottom" x="12" y="112">
         {bottomLabel}
       </text>
       {path ? <path className={`chart-line category-${category}`} d={path} /> : null}
