@@ -14,14 +14,16 @@ Use `rtk` before shell commands in this repo.
 - `rtk npm run build`: type-check and build the frontend.
 - `rtk cargo test` from `src-tauri/`: run Rust unit tests.
 - `rtk cargo clippy --all-targets -- -D warnings` from `src-tauri/`: enforce Rust lint cleanliness.
-- `rtk npm run tauri build -- --debug`: build a debug desktop executable and installer bundles.
-- `rtk powershell -NoProfile -ExecutionPolicy Bypass -File .codex-local\finish-task-install.ps1`: at the end of each task, build the latest release installer and install it locally without deleting existing app data. This script is local-only and must not be committed.
+- `rtk npm run tauri build`: build the release desktop executable and installer bundles.
+- `rtk powershell -NoProfile -ExecutionPolicy Bypass -File .codex-local\finish-task-install.ps1`: at the end of each task, build the latest release installer and install it locally without deleting existing app data. Local installs should use release packages only unless the user explicitly requests a debug build. This script is local-only and must not be committed.
 
 ## Coding Style & Naming Conventions
 
 Use TypeScript `strict` mode and React function components. Prefer small, typed helpers over broad utility modules. Use camelCase for TypeScript values and props, PascalCase for components and types. Rust uses `cargo fmt`, snake_case modules/functions, and explicit serde `camelCase` boundaries for frontend-facing JSON.
 
 Every code change must increment the application version number in all project version files.
+
+When the application version is incremented, complete the release flow after validation: create a matching `vX.Y.Z` git tag, push the commit and tag, and rely on GitHub Actions to publish the GitHub Release automatically. Do not leave a version bump only committed locally.
 
 ## Testing Guidelines
 
@@ -33,6 +35,8 @@ Git history uses Conventional Commits, for example `feat: build stats panel desk
 
 After completing requested changes, Codex should create a Conventional Commit for the work unless the user explicitly asks not to commit.
 
+After a completed version bump commit, Codex should push the branch and the matching version tag so GitHub Actions can create the release.
+
 ## Security & Configuration Tips
 
-Do not commit local config, generated bundles, or credentials. CPU temperature and power depend on LibreHardwareMonitor/OpenHardwareMonitor WMI and may require administrator setup; unavailable sensors should be reported as unavailable, never replaced with placeholder data.
+Do not commit local config, generated bundles, or credentials. It is acceptable for the local machine to keep `TAURI_SIGNING_PRIVATE_KEY` and related signing secrets in the environment for release installer builds, but never print, export, embed, or commit those secrets. CPU temperature and power depend on LibreHardwareMonitor/OpenHardwareMonitor WMI and may require administrator setup; unavailable sensors should be reported as unavailable, never replaced with placeholder data.
