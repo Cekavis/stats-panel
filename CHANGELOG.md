@@ -4,6 +4,8 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Prepared the project for public GitHub releases with a polished README, MIT license, release screenshot asset, and CI/release workflows.
+- Bumped the app version to 0.2.29.
 - Fixed stopped GPU fans reporting as unavailable by preserving `0 RPM` fan sensor readings.
 - Bumped the app version to 0.2.28.
 - Expanded spacious dashboard chart columns and CPU per-core usage bars so available row space is used more fully.
