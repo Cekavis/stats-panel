@@ -2,12 +2,15 @@ import {
   ChartNoAxesCombined,
   Gauge,
   MonitorCog,
+  Power,
+  RefreshCw,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { DASHBOARD_GROUPS } from "../dashboardGroups";
 import { needsIntegratedSensorDriver } from "../metrics";
+import type { AppUpdateState } from "../updates";
 import type {
   AppearancePreference,
   MetricDefinition,
@@ -28,9 +31,11 @@ type SettingsViewProps = {
   manifest: MetricDefinition[];
   onAppearanceChange: (value: AppearancePreference) => void;
   onChartHistoryChange: (value: number) => void;
+  onCheckForUpdates: () => void;
   onCompactChange: (value: boolean) => void;
   onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
+  onRestartForUpdate: () => void;
   onSensorHelp: () => void;
   onStartupChange: (value: boolean) => void;
   onToggleChart: (id: string) => void;
@@ -41,6 +46,7 @@ type SettingsViewProps = {
   samples: MetricSample[];
   sensorDriverBusy: boolean;
   sensorNote: string;
+  updateState: AppUpdateState;
 };
 
 const SAMPLING_PRESETS = [
@@ -61,9 +67,11 @@ export function SettingsView({
   manifest,
   onAppearanceChange,
   onChartHistoryChange,
+  onCheckForUpdates,
   onCompactChange,
   onEnableSensorDriver,
   onIntervalChange,
+  onRestartForUpdate,
   onSensorHelp,
   onStartupChange,
   onToggleChart,
@@ -74,11 +82,15 @@ export function SettingsView({
   samples,
   sensorDriverBusy,
   sensorNote,
+  updateState,
 }: SettingsViewProps) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
   const needsSensorDriver = needsIntegratedSensorDriver(samples);
   const metricsByGroup = getSettingsMetricGroups(manifest);
+  const updateBusy = ["checking", "downloading", "installing"].includes(updateState.status);
+  const updateLabel = getUpdateLabel(updateState);
+  const updateClassName = getUpdatePillClassName(updateState);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -159,6 +171,46 @@ export function SettingsView({
                     value={preferences.chartHistorySeconds}
                     onValueChange={onChartHistoryChange}
                   />
+                </div>
+
+                <div className="settings-subsection">
+                  <div className="update-row">
+                    <span className={updateClassName}>{updateLabel}</span>
+                    <div className="update-copy">
+                      <strong>Updates</strong>
+                      <p>{updateState.message}</p>
+                      {updateState.error ? <p>{updateState.error}</p> : null}
+                    </div>
+                  </div>
+                  {updateState.progress !== undefined ? (
+                    <div
+                      aria-label={`Update progress ${updateState.progress}%`}
+                      aria-valuemax={100}
+                      aria-valuemin={0}
+                      aria-valuenow={updateState.progress}
+                      className="update-progress"
+                      role="progressbar"
+                    >
+                      <span style={{ width: `${updateState.progress}%` }} />
+                    </div>
+                  ) : null}
+                  <div className="update-actions">
+                    <button
+                      className="text-button"
+                      disabled={updateBusy}
+                      type="button"
+                      onClick={onCheckForUpdates}
+                    >
+                      <RefreshCw size={14} />
+                      <span>{updateBusy ? "Working..." : "Check for updates"}</span>
+                    </button>
+                    {updateState.status === "installed" ? (
+                      <button className="text-button" type="button" onClick={onRestartForUpdate}>
+                        <Power size={14} />
+                        <span>Restart to finish</span>
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </section>
             </Tabs.Content>
@@ -263,6 +315,42 @@ export function SettingsView({
       </main>
     </TooltipProvider>
   );
+}
+
+function getUpdateLabel(updateState: AppUpdateState) {
+  switch (updateState.status) {
+    case "checking":
+      return "Checking";
+    case "downloading":
+      return "Download";
+    case "installing":
+      return "Install";
+    case "installed":
+      return "Ready";
+    case "upToDate":
+      return "Current";
+    case "error":
+      return "Retry";
+    case "idle":
+    default:
+      return "Idle";
+  }
+}
+
+function getUpdatePillClassName(updateState: AppUpdateState) {
+  if (updateState.status === "upToDate" || updateState.status === "installed") {
+    return "status-pill is-online";
+  }
+
+  if (updateState.status === "checking" || updateState.status === "downloading") {
+    return "status-pill is-busy";
+  }
+
+  if (updateState.status === "installing") {
+    return "status-pill is-warning";
+  }
+
+  return "status-pill";
 }
 
 function getSettingsMetricGroups(manifest: MetricDefinition[]) {

@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added signed GitHub Release update checks that automatically download and install available updates while using the system proxy by default.
+- Added Settings update status, manual update checks, and a restart action after an update is installed.
+- Bumped the app version to 0.2.30.
 - Prepared the project for public GitHub releases with a polished README, MIT license, release screenshot asset, and CI/release workflows.
 - Bumped the app version to 0.2.29.
 - Fixed stopped GPU fans reporting as unavailable by preserving `0 RPM` fan sensor readings.

@@ -33,6 +33,7 @@ Stats Panel is built for people who want a quiet, always-visible hardware dashbo
 - Grouped metric visibility, compact charts, configurable sampling, and configurable chart history.
 - Light, Dark, and Auto themes with local preference persistence.
 - Borderless resizable dashboard window with tray restore/quit actions and a separate settings window.
+- GitHub Release update checks with signed automatic installer updates.
 - Windows installer bundles built by Tauri.
 
 ## Download
@@ -40,6 +41,8 @@ Stats Panel is built for people who want a quiet, always-visible hardware dashbo
 Download the latest Windows installer from [GitHub Releases](https://github.com/Cekavis/stats-panel/releases/latest).
 
 The NSIS setup executable is the recommended installer for most users. MSI bundles are also published for environments that prefer Windows Installer packages.
+
+Stats Panel checks GitHub Releases for signed updates. Update checks use the default system networking stack, so Windows system proxy settings apply automatically.
 
 ## Sensor Notes
 
@@ -76,11 +79,13 @@ Run Cargo commands from `src-tauri` when invoking Cargo directly.
 Releases are built by GitHub Actions when a version tag is pushed:
 
 ```powershell
-git tag v0.2.29
-git push origin v0.2.29
+git tag v0.2.30
+git push origin v0.2.30
 ```
 
-The release workflow checks that the tag matches the version recorded in the project files, builds the Windows Tauri bundles, creates a GitHub Release, and uploads installer assets automatically.
+The release workflow checks that the tag matches the version recorded in the project files, builds the Windows Tauri bundles, creates a GitHub Release, and uploads installer assets plus signed updater metadata automatically.
+
+Updater signing uses the public key committed in `src-tauri/tauri.conf.json`. The matching private key and password must be configured as GitHub Actions secrets named `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
 ## License
 

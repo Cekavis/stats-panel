@@ -16,6 +16,12 @@ import {
   type History,
 } from "./metrics";
 import { useResolvedAppearance } from "./theme";
+import {
+  checkAndInstallUpdate,
+  INITIAL_UPDATE_STATE,
+  restartApp,
+  type AppUpdateState,
+} from "./updates";
 import type {
   AppearancePreference,
   MetricDefinition,
@@ -31,6 +37,7 @@ function App() {
   const [history, setHistory] = useState<History>({});
   const [sensorNote, setSensorNote] = useState("");
   const [sensorDriverBusy, setSensorDriverBusy] = useState(false);
+  const [updateState, setUpdateState] = useState<AppUpdateState>(INITIAL_UPDATE_STATE);
   const [error, setError] = useState("");
 
   const isSettingsView = new URLSearchParams(window.location.search).get("view") === "settings";
@@ -103,6 +110,23 @@ function App() {
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (isSettingsView) {
+      return;
+    }
+
+    let disposed = false;
+    checkAndInstallUpdate((nextState) => {
+      if (!disposed) {
+        setUpdateState(nextState);
+      }
+    }, { automatic: true });
+
+    return () => {
+      disposed = true;
+    };
+  }, [isSettingsView]);
 
   const metricById = useMemo(
     () => new Map(manifest.map((metric) => [metric.id, metric])),
@@ -223,6 +247,23 @@ function App() {
     }
   }
 
+  async function checkForUpdates() {
+    await checkAndInstallUpdate(setUpdateState);
+  }
+
+  async function restartForUpdate() {
+    try {
+      await restartApp();
+    } catch (nextError) {
+      setUpdateState((current) => ({
+        ...current,
+        error: String(nextError),
+        message: "Could not restart Stats Panel. Close and reopen it to finish.",
+        status: "error",
+      }));
+    }
+  }
+
   if (error) {
     return (
       <main className={isSettingsView ? "settings-shell is-error" : "dashboard-shell is-error"}>
@@ -258,14 +299,17 @@ function App() {
         sensorNote={sensorNote}
         onAppearanceChange={updateAppearance}
         onChartHistoryChange={updateChartHistory}
+        onCheckForUpdates={checkForUpdates}
         onCompactChange={(compact) => updateWindow("compact", compact)}
         onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
+        onRestartForUpdate={restartForUpdate}
         onSensorHelp={showSensorHelp}
         onStartupChange={updateStartup}
         onToggleChart={toggleChart}
         onToggleVisible={toggleVisible}
         onTopChange={(alwaysOnTop) => updateWindow("alwaysOnTop", alwaysOnTop)}
+        updateState={updateState}
       />
     );
   }

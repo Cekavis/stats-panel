@@ -479,6 +479,17 @@ button:focus-visible,
   font-weight: 500;
 }
 
+.text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.text-button svg {
+  flex: 0 0 auto;
+}
+
 .sensor-driver-callout button {
   min-height: 28px;
   color: var(--color-warning);
@@ -935,6 +946,52 @@ button:focus-visible,
   gap: 8px;
 }
 
+.update-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.update-copy {
+  min-width: 0;
+}
+
+.update-copy strong {
+  display: block;
+  color: var(--color-charcoal);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.update-copy p {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--color-steel);
+  font-size: 0.72rem;
+}
+
+.update-progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-hairline);
+}
+
+.update-progress span {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--color-primary);
+}
+
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .provider-row {
   display: grid;
   grid-template-columns: 64px minmax(0, 1fr);
@@ -971,6 +1028,16 @@ button:focus-visible,
 .status-pill.is-online {
   background: var(--color-success-bg);
   color: var(--color-success);
+}
+
+.status-pill.is-busy {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-panel));
+  color: var(--color-primary);
+}
+
+.status-pill.is-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
 }
 
 .empty-state {
