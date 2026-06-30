@@ -398,7 +398,7 @@ static double? SelectAverageFanSpeed(IEnumerable<ISensor> sensors)
 {
     var values = sensors
         .Where(sensor => sensor.SensorType == SensorType.Fan && sensor.Value.HasValue)
-        .Where(sensor => sensor.Value!.Value > 0)
+        .Where(sensor => sensor.Value!.Value >= 0)
         .Select(sensor => sensor.Value!.Value)
         .ToList();
 

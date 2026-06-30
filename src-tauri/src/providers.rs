@@ -846,6 +846,57 @@ mod tests {
     }
 
     #[test]
+    fn helper_reading_preserves_zero_gpu_fan_speed() {
+        let reading = parse_helper_reading(
+            r#"{"available":true,"gpuFanSpeed":0.0,"message":"online","timestamp":1}"#,
+        )
+        .expect("helper JSON should parse");
+
+        assert_eq!(reading.gpu_fan_speed, Some(0.0));
+    }
+
+    #[test]
+    fn optional_gpu_fan_zero_is_ok_sample() {
+        let mut samples = Vec::new();
+        push_optional_sensor(
+            &mut samples,
+            "gpu.fan_speed",
+            "RPM",
+            1,
+            Some(0.0),
+            "GPU fan speed sensor not found.",
+        );
+
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].id, "gpu.fan_speed");
+        assert_eq!(samples[0].value, Some(0.0));
+        assert_eq!(samples[0].status, SampleStatus::Ok);
+        assert_eq!(samples[0].message, None);
+    }
+
+    #[test]
+    fn optional_gpu_fan_none_is_unavailable_sample() {
+        let mut samples = Vec::new();
+        push_optional_sensor(
+            &mut samples,
+            "gpu.fan_speed",
+            "RPM",
+            1,
+            None,
+            "GPU fan speed sensor not found.",
+        );
+
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].id, "gpu.fan_speed");
+        assert_eq!(samples[0].value, None);
+        assert_eq!(samples[0].status, SampleStatus::Unavailable);
+        assert_eq!(
+            samples[0].message.as_deref(),
+            Some("GPU fan speed sensor not found.")
+        );
+    }
+
+    #[test]
     fn hardware_monitor_provider_returns_helper_message_when_unavailable() {
         let provider = HardwareMonitorProvider::unavailable("not ready");
 
