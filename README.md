@@ -18,7 +18,7 @@
   <img alt="Tauri v2" src="https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri">
 </p>
 
-![Stats Panel dashboard](docs/assets/stats-panel-dashboard.png)
+![Stats Panel dashboard](docs/assets/stats-panel-dashboard.jpg)
 
 ## Why Stats Panel
 
@@ -55,21 +55,22 @@ Stats Panel runs normally without administrator privileges. Elevation is only re
 Install dependencies:
 
 ```powershell
-rtk npm install
+npm install
 ```
 
 Run the desktop app:
 
 ```powershell
-rtk npm run tauri dev
+npm run tauri dev
 ```
 
 Build and validate locally:
 
 ```powershell
-rtk npm run build
-rtk cargo test
-rtk cargo clippy --all-targets -- -D warnings
+npm run build
+cd src-tauri
+cargo test
+cargo clippy --all-targets -- -D warnings
 ```
 
 Run Cargo commands from `src-tauri` when invoking Cargo directly.
