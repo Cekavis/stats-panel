@@ -3,7 +3,11 @@ mod preferences;
 mod providers;
 
 use metrics::{metric_manifest, MetricDefinition};
-use preferences::{load_preferences, save_preferences_to_disk, UserPreferences, WindowPreferences};
+use preferences::{
+    load_preferences, save_preferences_to_disk, ThemeColors, UserPreferences, WindowPreferences,
+    DEFAULT_CPU_COLOR, DEFAULT_DISK_COLOR, DEFAULT_GPU_COLOR, DEFAULT_LIGHT_CARD_BACKGROUND,
+    DEFAULT_MEMORY_COLOR, DEFAULT_NETWORK_COLOR,
+};
 use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
 use std::{
     fs,
@@ -576,6 +580,7 @@ fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
     }
     preferences.sample_interval_ms = preferences.sample_interval_ms.clamp(500, 5_000);
     preferences.chart_history_seconds = preferences.chart_history_seconds.clamp(10, 300);
+    preferences.colors = sanitize_theme_colors(preferences.colors);
     preferences.window = sanitize_window_preferences(preferences.window);
     preferences
 }
@@ -590,4 +595,76 @@ fn sanitize_window_preferences(mut window: WindowPreferences) -> WindowPreferenc
     window.width = window.width.clamp(320.0, 1_800.0);
     window.height = window.height.clamp(420.0, 2_600.0);
     window
+}
+
+fn sanitize_theme_colors(mut colors: ThemeColors) -> ThemeColors {
+    colors.cpu = sanitize_hex_color(&colors.cpu, DEFAULT_CPU_COLOR);
+    colors.memory = sanitize_hex_color(&colors.memory, DEFAULT_MEMORY_COLOR);
+    colors.gpu = sanitize_hex_color(&colors.gpu, DEFAULT_GPU_COLOR);
+    colors.network = sanitize_hex_color(&colors.network, DEFAULT_NETWORK_COLOR);
+    colors.disk = sanitize_hex_color(&colors.disk, DEFAULT_DISK_COLOR);
+    colors.light_card_background =
+        sanitize_hex_color(&colors.light_card_background, DEFAULT_LIGHT_CARD_BACKGROUND);
+    colors
+}
+
+fn sanitize_hex_color(value: &str, default_value: &str) -> String {
+    if value.len() == 7
+        && value.starts_with('#')
+        && value.as_bytes()[1..]
+            .iter()
+            .all(|byte| byte.is_ascii_hexdigit())
+    {
+        return value.to_ascii_lowercase();
+    }
+
+    default_value.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitize_preferences_preserves_valid_theme_colors() {
+        let mut preferences = UserPreferences::default();
+        preferences.colors.cpu = "#ABCDEF".to_string();
+        preferences.colors.memory = "#123456".to_string();
+        preferences.colors.gpu = "#000000".to_string();
+        preferences.colors.network = "#ffffff".to_string();
+        preferences.colors.disk = "#987654".to_string();
+        preferences.colors.light_card_background = "#fefefe".to_string();
+
+        let sanitized = sanitize_preferences(preferences);
+
+        assert_eq!(sanitized.colors.cpu, "#abcdef");
+        assert_eq!(sanitized.colors.memory, "#123456");
+        assert_eq!(sanitized.colors.gpu, "#000000");
+        assert_eq!(sanitized.colors.network, "#ffffff");
+        assert_eq!(sanitized.colors.disk, "#987654");
+        assert_eq!(sanitized.colors.light_card_background, "#fefefe");
+    }
+
+    #[test]
+    fn sanitize_preferences_resets_invalid_theme_colors() {
+        let mut preferences = UserPreferences::default();
+        preferences.colors.cpu = "red".to_string();
+        preferences.colors.memory = "#12345".to_string();
+        preferences.colors.gpu = "#1234567".to_string();
+        preferences.colors.network = "#12zzzz".to_string();
+        preferences.colors.disk = "rgb(0, 0, 0)".to_string();
+        preferences.colors.light_card_background = "#fffffg".to_string();
+
+        let sanitized = sanitize_preferences(preferences);
+
+        assert_eq!(sanitized.colors.cpu, DEFAULT_CPU_COLOR);
+        assert_eq!(sanitized.colors.memory, DEFAULT_MEMORY_COLOR);
+        assert_eq!(sanitized.colors.gpu, DEFAULT_GPU_COLOR);
+        assert_eq!(sanitized.colors.network, DEFAULT_NETWORK_COLOR);
+        assert_eq!(sanitized.colors.disk, DEFAULT_DISK_COLOR);
+        assert_eq!(
+            sanitized.colors.light_card_background,
+            DEFAULT_LIGHT_CARD_BACKGROUND
+        );
+    }
 }

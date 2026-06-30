@@ -48,10 +48,20 @@ export type WindowPreferences = {
   compact: boolean;
 };
 
+export type ThemeColors = {
+  cpu: string;
+  memory: string;
+  gpu: string;
+  network: string;
+  disk: string;
+  lightCardBackground: string;
+};
+
 export type UserPreferences = {
   metricSchemaVersion: number;
   appearance: AppearancePreference;
   launchAtStartup: boolean;
+  colors: ThemeColors;
   visibleMetricIds: string[];
   chartMetricIds: string[];
   sampleIntervalMs: number;

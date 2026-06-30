@@ -2,20 +2,24 @@ import {
   ChartNoAxesCombined,
   Gauge,
   MonitorCog,
+  Palette,
   Power,
   RefreshCw,
+  RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { DASHBOARD_GROUPS } from "../dashboardGroups";
 import { needsIntegratedSensorDriver } from "../metrics";
+import { DEFAULT_THEME_COLORS } from "../theme";
 import type { AppUpdateState } from "../updates";
 import type {
   AppearancePreference,
   MetricDefinition,
   MetricSample,
   ProviderStatus,
+  ThemeColors,
   UserPreferences,
 } from "../types";
 import {
@@ -32,6 +36,7 @@ type SettingsViewProps = {
   onAppearanceChange: (value: AppearancePreference) => void;
   onChartHistoryChange: (value: number) => void;
   onCheckForUpdates: () => void;
+  onColorsChange: (value: ThemeColors) => void;
   onCompactChange: (value: boolean) => void;
   onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
@@ -63,11 +68,21 @@ const CHART_WINDOW_PRESETS = [
   { label: "5 m", value: 300 },
 ];
 
+const COLOR_CONTROLS: Array<{ key: keyof ThemeColors; label: string }> = [
+  { key: "cpu", label: "CPU" },
+  { key: "gpu", label: "GPU" },
+  { key: "memory", label: "Memory" },
+  { key: "network", label: "Network" },
+  { key: "disk", label: "Disk" },
+  { key: "lightCardBackground", label: "Light card" },
+];
+
 export function SettingsView({
   manifest,
   onAppearanceChange,
   onChartHistoryChange,
   onCheckForUpdates,
+  onColorsChange,
   onCompactChange,
   onEnableSensorDriver,
   onIntervalChange,
@@ -98,7 +113,7 @@ export function SettingsView({
         <header className="settings-titlebar" data-tauri-drag-region>
           <div data-tauri-drag-region>
             <h1>Stats Panel Settings</h1>
-            <span>Display, sampling, and data sources</span>
+            <span>Display, colors, sampling, and data sources</span>
           </div>
           <SlidersHorizontal size={21} />
         </header>
@@ -112,6 +127,10 @@ export function SettingsView({
             <Tabs.Trigger className="settings-tab-trigger" value="metrics">
               <ChartNoAxesCombined size={15} />
               <span>Metrics</span>
+            </Tabs.Trigger>
+            <Tabs.Trigger className="settings-tab-trigger" value="colors">
+              <Palette size={15} />
+              <span>Colors</span>
             </Tabs.Trigger>
             <Tabs.Trigger className="settings-tab-trigger" value="sources">
               <MonitorCog size={15} />
@@ -263,6 +282,39 @@ export function SettingsView({
               </section>
             </Tabs.Content>
 
+            <Tabs.Content className="settings-tab-panel" value="colors">
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <Palette size={18} />
+                  <h2>Colors</h2>
+                </div>
+
+                <div className="color-control-list">
+                  {COLOR_CONTROLS.map((control) => (
+                    <ColorControl
+                      key={control.key}
+                      label={control.label}
+                      value={preferences.colors[control.key]}
+                      onValueChange={(value) =>
+                        onColorsChange({ ...preferences.colors, [control.key]: value })
+                      }
+                    />
+                  ))}
+                </div>
+
+                <div className="settings-actions">
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => onColorsChange(DEFAULT_THEME_COLORS)}
+                  >
+                    <RotateCcw size={14} />
+                    <span>Reset colors</span>
+                  </button>
+                </div>
+              </section>
+            </Tabs.Content>
+
             <Tabs.Content className="settings-tab-panel" value="sources">
               <section className="settings-section">
                 <div className="settings-section-heading">
@@ -314,6 +366,32 @@ export function SettingsView({
         </Tabs.Root>
       </main>
     </TooltipProvider>
+  );
+}
+
+function ColorControl({
+  label,
+  onValueChange,
+  value,
+}: {
+  label: string;
+  onValueChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <label className="color-control-row">
+      <span>{label}</span>
+      <span className="color-picker-field">
+        <input
+          aria-label={`${label} color`}
+          className="color-picker-input"
+          type="color"
+          value={value}
+          onChange={(event) => onValueChange(event.currentTarget.value)}
+        />
+        <em>{value}</em>
+      </span>
+    </label>
   );
 }
 

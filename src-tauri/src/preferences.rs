@@ -11,6 +11,8 @@ pub struct UserPreferences {
     pub appearance: AppearancePreference,
     #[serde(default)]
     pub launch_at_startup: bool,
+    #[serde(default)]
+    pub colors: ThemeColors,
     pub visible_metric_ids: Vec<String>,
     pub chart_metric_ids: Vec<String>,
     pub sample_interval_ms: u64,
@@ -26,6 +28,30 @@ pub enum AppearancePreference {
     Dark,
     #[default]
     System,
+}
+
+pub const DEFAULT_CPU_COLOR: &str = "#ed1c24";
+pub const DEFAULT_MEMORY_COLOR: &str = "#f59e0b";
+pub const DEFAULT_GPU_COLOR: &str = "#76b900";
+pub const DEFAULT_NETWORK_COLOR: &str = "#0ea5e9";
+pub const DEFAULT_DISK_COLOR: &str = "#8b5cf6";
+pub const DEFAULT_LIGHT_CARD_BACKGROUND: &str = "#ffffff";
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeColors {
+    #[serde(default = "default_cpu_color")]
+    pub cpu: String,
+    #[serde(default = "default_memory_color")]
+    pub memory: String,
+    #[serde(default = "default_gpu_color")]
+    pub gpu: String,
+    #[serde(default = "default_network_color")]
+    pub network: String,
+    #[serde(default = "default_disk_color")]
+    pub disk: String,
+    #[serde(default = "default_light_card_background")]
+    pub light_card_background: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,6 +71,7 @@ impl Default for UserPreferences {
             metric_schema_version: 3,
             appearance: AppearancePreference::System,
             launch_at_startup: false,
+            colors: ThemeColors::default(),
             visible_metric_ids: vec![
                 "cpu.usage",
                 "cpu.frequency",
@@ -93,6 +120,43 @@ impl Default for UserPreferences {
 
 fn default_chart_history_seconds() -> u64 {
     60
+}
+
+fn default_cpu_color() -> String {
+    DEFAULT_CPU_COLOR.to_string()
+}
+
+fn default_memory_color() -> String {
+    DEFAULT_MEMORY_COLOR.to_string()
+}
+
+fn default_gpu_color() -> String {
+    DEFAULT_GPU_COLOR.to_string()
+}
+
+fn default_network_color() -> String {
+    DEFAULT_NETWORK_COLOR.to_string()
+}
+
+fn default_disk_color() -> String {
+    DEFAULT_DISK_COLOR.to_string()
+}
+
+fn default_light_card_background() -> String {
+    DEFAULT_LIGHT_CARD_BACKGROUND.to_string()
+}
+
+impl Default for ThemeColors {
+    fn default() -> Self {
+        Self {
+            cpu: default_cpu_color(),
+            memory: default_memory_color(),
+            gpu: default_gpu_color(),
+            network: default_network_color(),
+            disk: default_disk_color(),
+            light_card_background: default_light_card_background(),
+        }
+    }
 }
 
 impl Default for WindowPreferences {
@@ -156,6 +220,12 @@ mod tests {
         assert_eq!(preferences.chart_history_seconds, 60);
         assert_eq!(preferences.appearance, AppearancePreference::System);
         assert!(!preferences.launch_at_startup);
+        assert_eq!(preferences.colors.cpu, DEFAULT_CPU_COLOR);
+        assert_eq!(preferences.colors.gpu, DEFAULT_GPU_COLOR);
+        assert_eq!(
+            preferences.colors.light_card_background,
+            DEFAULT_LIGHT_CARD_BACKGROUND
+        );
         assert_eq!(preferences.window.width, 1280.0);
     }
 
@@ -171,6 +241,7 @@ mod tests {
         assert!(json.contains(r#""appearance":"system""#));
         assert!(json.contains("launchAtStartup"));
         assert!(json.contains("chartHistorySeconds"));
+        assert!(json.contains("lightCardBackground"));
         assert_eq!(parsed.chart_metric_ids, preferences.chart_metric_ids);
         assert_eq!(parsed.appearance, AppearancePreference::System);
         assert_eq!(
@@ -202,5 +273,36 @@ mod tests {
 
         assert_eq!(parsed.chart_history_seconds, 60);
         assert_eq!(parsed.appearance, AppearancePreference::System);
+        assert_eq!(parsed.colors, ThemeColors::default());
+    }
+
+    #[test]
+    fn partial_color_preferences_use_defaults() {
+        let json = r##"{
+            "metricSchemaVersion": 3,
+            "appearance": "light",
+            "launchAtStartup": false,
+            "colors": {
+                "cpu": "#123456"
+            },
+            "visibleMetricIds": ["cpu.usage"],
+            "chartMetricIds": ["cpu.usage"],
+            "sampleIntervalMs": 1000,
+            "chartHistorySeconds": 60,
+            "window": {
+                "width": 1280.0,
+                "height": 2160.0,
+                "x": null,
+                "y": null,
+                "alwaysOnTop": false,
+                "compact": false
+            }
+        }"##;
+        let parsed: UserPreferences =
+            serde_json::from_str(json).expect("partial color preferences should deserialize");
+
+        assert_eq!(parsed.colors.cpu, "#123456");
+        assert_eq!(parsed.colors.memory, DEFAULT_MEMORY_COLOR);
+        assert_eq!(parsed.colors.gpu, DEFAULT_GPU_COLOR);
     }
 }

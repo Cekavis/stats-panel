@@ -17,6 +17,7 @@ Stats Panel should feel like a compact Notion workspace panel adapted for live t
 - Radius: 8px for buttons and inputs, 12px for dashboard/settings cards, full radius only for status badges and switch thumbs.
 - Light canvas: `#ffffff`.
 - Light surface: `#f6f5f4`.
+- Light card background: configurable, default `#ffffff`.
 - Light text: `#37352f`, with `#5d5b54` and `#787671` for secondary labels.
 - Hairlines: `#e5e3df`, `#ede9e4`, and `#c8c4be`.
 - Primary action: Notion purple `#5645d4`, pressed `#4534b3`.
@@ -28,6 +29,8 @@ Stats Panel should feel like a compact Notion workspace panel adapted for live t
 
 Settings expose `Light`, `Dark`, and `Auto`. `Auto` persists as `system` and follows `prefers-color-scheme`. Old preferences without an appearance field default to `system`.
 
+Metric colors and the light-mode card background are configurable in Settings. Metric colors are shared across light and dark modes; the card background override applies only in light mode.
+
 ## Components
 
 - Use Radix Primitives for switches, sliders, checkboxes, toggle groups, and tooltips.
@@ -38,10 +41,10 @@ Settings expose `Light`, `Dark`, and `Auto`. `Auto` persists as `system` and fol
 
 ## Metric Colors
 
-- CPU: Notion teal `#2a9d99`.
-- Memory: Notion yellow/brown family `#c29343`.
-- GPU: Notion blue `#337ea9`.
-- Network: Notion green `#448361`.
-- Disk: Notion red `#d44c47`.
+- CPU: AMD red `#ed1c24`.
+- GPU: NVIDIA green `#76b900`.
+- Memory: amber `#f59e0b`.
+- Network: sky blue `#0ea5e9`.
+- Disk: violet `#8b5cf6`.
 
-Dark mode uses the corresponding brighter Notion dark-mode icon/text variants for legibility.
+Soft accent backgrounds are derived from the configured metric colors for the active appearance.

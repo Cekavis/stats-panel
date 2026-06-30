@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Added configurable metric category colors and a configurable light-mode card background.
+- Updated default metric colors to AMD red for CPU, NVIDIA green for GPU, and distinct Memory, Network, and Disk accents.
+- Bumped the app version to 0.2.31.
 - Added signed GitHub Release update checks that automatically download and install available updates while using the system proxy by default.
 - Added Settings update status, manual update checks, and a restart action after an update is installed.
 - Bumped the app version to 0.2.30.

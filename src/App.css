@@ -29,8 +29,9 @@
   --color-surface: #f6f5f4;
   --color-surface-soft: #fafaf9;
   --color-panel: #ffffff;
-  --color-row: #fafaf9;
-  --color-row-hover: #f6f5f4;
+  --color-card-background: #ffffff;
+  --color-row: #ffffff;
+  --color-row-hover: #fafaf9;
   --color-hairline: #e5e3df;
   --color-hairline-soft: #ede9e4;
   --color-hairline-strong: #c8c4be;
@@ -50,16 +51,16 @@
   --color-success-bg: #eef3ed;
   --color-danger: #d44c47;
   --color-danger-bg: #faecec;
-  --accent-cpu: #2a9d99;
-  --accent-cpu-soft: #ddebea;
-  --accent-memory: #c29343;
-  --accent-memory-soft: #faf3dd;
-  --accent-gpu: #337ea9;
-  --accent-gpu-soft: #e9f3f7;
-  --accent-network: #448361;
-  --accent-network-soft: #eef3ed;
-  --accent-disk: #d44c47;
-  --accent-disk-soft: #faecec;
+  --accent-cpu: #ed1c24;
+  --accent-cpu-soft: color-mix(in srgb, var(--accent-cpu) 14%, var(--color-card-background));
+  --accent-memory: #f59e0b;
+  --accent-memory-soft: color-mix(in srgb, var(--accent-memory) 14%, var(--color-card-background));
+  --accent-gpu: #76b900;
+  --accent-gpu-soft: color-mix(in srgb, var(--accent-gpu) 14%, var(--color-card-background));
+  --accent-network: #0ea5e9;
+  --accent-network-soft: color-mix(in srgb, var(--accent-network) 14%, var(--color-card-background));
+  --accent-disk: #8b5cf6;
+  --accent-disk-soft: color-mix(in srgb, var(--accent-disk) 14%, var(--color-card-background));
   color: var(--color-charcoal);
   background: var(--color-canvas);
 }
@@ -69,6 +70,7 @@
   --color-surface: #202020;
   --color-surface-soft: #252525;
   --color-panel: #1f1f1f;
+  --color-card-background: var(--color-panel);
   --color-row: #202020;
   --color-row-hover: #252525;
   --color-hairline: #303030;
@@ -90,16 +92,16 @@
   --color-success-bg: #242b26;
   --color-danger: #cd4945;
   --color-danger-bg: #332523;
-  --accent-cpu: #4dab9a;
-  --accent-cpu-soft: #263433;
-  --accent-memory: #c19138;
-  --accent-memory-soft: #372e20;
-  --accent-gpu: #529cca;
-  --accent-gpu-soft: #1f282d;
-  --accent-network: #4f9768;
-  --accent-network-soft: #242b26;
-  --accent-disk: #be524b;
-  --accent-disk-soft: #332523;
+  --accent-cpu: #ed1c24;
+  --accent-cpu-soft: color-mix(in srgb, var(--accent-cpu) 24%, var(--color-card-background));
+  --accent-memory: #f59e0b;
+  --accent-memory-soft: color-mix(in srgb, var(--accent-memory) 24%, var(--color-card-background));
+  --accent-gpu: #76b900;
+  --accent-gpu-soft: color-mix(in srgb, var(--accent-gpu) 24%, var(--color-card-background));
+  --accent-network: #0ea5e9;
+  --accent-network-soft: color-mix(in srgb, var(--accent-network) 24%, var(--color-card-background));
+  --accent-disk: #8b5cf6;
+  --accent-disk-soft: color-mix(in srgb, var(--accent-disk) 24%, var(--color-card-background));
   color: var(--color-charcoal);
   background: var(--color-canvas);
 }
@@ -127,6 +129,7 @@ button {
 
 button:focus-visible,
 .appearance-toggle-item:focus-visible,
+.color-picker-input:focus-visible,
 .custom-number-control input:focus-visible,
 .metric-check:focus-visible,
 .number-preset-item:focus-visible,
@@ -174,7 +177,7 @@ button:focus-visible,
   padding: clamp(10px, 1vw, 18px);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-lg);
-  background: var(--color-panel);
+  background: var(--color-card-background);
 }
 
 .metric-list {
@@ -197,7 +200,7 @@ button:focus-visible,
   border: 1px solid var(--color-hairline-soft);
   border-left-width: 4px;
   border-radius: var(--radius-md);
-  background: var(--color-row);
+  background: var(--color-card-background);
 }
 
 .metric-row-cpu {
@@ -586,7 +589,7 @@ button:focus-visible,
 
 .settings-tab-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 10px 14px 0;
   background: var(--color-surface);
@@ -636,7 +639,7 @@ button:focus-visible,
   padding: 14px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-lg);
-  background: var(--color-panel);
+  background: var(--color-card-background);
 }
 
 .settings-section-heading {
@@ -772,6 +775,74 @@ button:focus-visible,
   color: var(--color-charcoal);
   font-size: 0.78rem;
   font-weight: 500;
+}
+
+.color-control-list {
+  min-width: 0;
+  display: grid;
+}
+
+.color-control-row {
+  min-width: 0;
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-charcoal);
+  font-size: 0.78rem;
+}
+
+.color-control-row + .color-control-row {
+  border-top: 1px solid var(--color-hairline-soft);
+}
+
+.color-control-row > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.color-picker-field {
+  min-width: 0;
+  display: inline-grid;
+  grid-template-columns: 32px auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-steel);
+}
+
+.color-picker-field em {
+  font-size: 0.72rem;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.color-picker-input {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+}
+
+.color-picker-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker-input::-webkit-color-swatch {
+  border: 1px solid var(--color-hairline-strong);
+  border-radius: var(--radius-md);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .ui-switch {

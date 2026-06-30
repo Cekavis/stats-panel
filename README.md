@@ -79,8 +79,8 @@ Run Cargo commands from `src-tauri` when invoking Cargo directly.
 Releases are built by GitHub Actions when a version tag is pushed:
 
 ```powershell
-git tag v0.2.30
-git push origin v0.2.30
+git tag v0.2.31
+git push origin v0.2.31
 ```
 
 The release workflow checks that the tag matches the version recorded in the project files, builds the Windows Tauri bundles, creates a GitHub Release, and uploads installer assets plus signed updater metadata automatically.

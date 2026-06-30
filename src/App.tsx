@@ -15,7 +15,7 @@ import {
   DEFAULT_CHART_HISTORY_SECONDS,
   type History,
 } from "./metrics";
-import { useResolvedAppearance } from "./theme";
+import { DEFAULT_THEME_COLORS, useResolvedAppearance } from "./theme";
 import {
   checkAndInstallUpdate,
   INITIAL_UPDATE_STATE,
@@ -26,6 +26,7 @@ import type {
   AppearancePreference,
   MetricDefinition,
   TelemetrySnapshot,
+  ThemeColors,
   UserPreferences,
 } from "./types";
 import "./App.css";
@@ -42,7 +43,10 @@ function App() {
 
   const isSettingsView = new URLSearchParams(window.location.search).get("view") === "settings";
 
-  useResolvedAppearance(preferences?.appearance ?? "system");
+  useResolvedAppearance(
+    preferences?.appearance ?? "system",
+    preferences?.colors ?? DEFAULT_THEME_COLORS,
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -194,6 +198,13 @@ function App() {
     persist({ ...preferences, appearance });
   }
 
+  function updateColors(colors: ThemeColors) {
+    if (!preferences) {
+      return;
+    }
+    persist({ ...preferences, colors });
+  }
+
   function updateInterval(sampleIntervalMs: number) {
     if (!preferences) {
       return;
@@ -300,6 +311,7 @@ function App() {
         onAppearanceChange={updateAppearance}
         onChartHistoryChange={updateChartHistory}
         onCheckForUpdates={checkForUpdates}
+        onColorsChange={updateColors}
         onCompactChange={(compact) => updateWindow("compact", compact)}
         onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
