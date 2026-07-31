@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Preserved the main window's adjusted size and position while ignoring transient invalid geometry during display resets.
+- Restored off-screen windows onto the current primary display when the saved monitor is unavailable.
+- Bumped the app version to 0.2.33.
 - Prevented duplicate app processes; reopening Stats Panel now shows and focuses the existing main window.
 - Bumped the app version to 0.2.32.
 - Added configurable metric category colors and a configurable light-mode card background.

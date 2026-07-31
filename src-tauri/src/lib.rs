@@ -19,7 +19,8 @@ use std::{
 };
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
-    LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -342,6 +343,7 @@ pub fn run() {
             });
 
             apply_window_preferences(&app_handle, &preferences.window)?;
+            save_window_geometry(&app_handle);
             let _ = apply_startup_preference(&app_handle, preferences.launch_at_startup);
             setup_window_events(app);
             setup_tray(app)?;
@@ -513,6 +515,10 @@ fn apply_window_preferences(
             .map_err(|error| error.to_string())?;
     }
 
+    if !window_is_visible(&window) {
+        window.center().map_err(|error| error.to_string())?;
+    }
+
     window
         .set_always_on_top(preferences.always_on_top)
         .map_err(|error| error.to_string())?;
@@ -555,24 +561,78 @@ fn save_window_geometry(app: &AppHandle) {
         return;
     };
 
+    if window.is_minimized().unwrap_or(false) {
+        return;
+    }
+
     let scale_factor = window.scale_factor().unwrap_or(1.0);
-    let size = window.inner_size().ok();
-    let position = window.outer_position().ok();
+    let Ok(size) = window.inner_size() else {
+        return;
+    };
+    let width = size.width as f64 / scale_factor;
+    let height = size.height as f64 / scale_factor;
+    if width < 320.0 || height < 420.0 || !window_is_visible(&window) {
+        return;
+    }
+
+    let Ok(position) = window.outer_position() else {
+        return;
+    };
 
     let Ok(mut preferences) = state.preferences.lock() else {
         return;
     };
 
-    if let Some(size) = size {
-        preferences.window.width = (size.width as f64 / scale_factor).max(320.0);
-        preferences.window.height = (size.height as f64 / scale_factor).max(420.0);
-    }
-    if let Some(position) = position {
-        preferences.window.x = Some(position.x as f64 / scale_factor);
-        preferences.window.y = Some(position.y as f64 / scale_factor);
-    }
+    preferences.window.width = width.clamp(320.0, 1_800.0);
+    preferences.window.height = height.clamp(420.0, 2_600.0);
+    preferences.window.x = Some(position.x as f64 / scale_factor);
+    preferences.window.y = Some(position.y as f64 / scale_factor);
 
     let _ = save_preferences_to_disk(app, &preferences);
+}
+
+fn window_is_visible(window: &WebviewWindow) -> bool {
+    let (Ok(position), Ok(size), Ok(monitors)) = (
+        window.outer_position(),
+        window.outer_size(),
+        window.available_monitors(),
+    ) else {
+        return false;
+    };
+
+    monitors.iter().any(|monitor| {
+        let work_area = monitor.work_area();
+        rectangles_overlap(
+            position.x,
+            position.y,
+            size.width,
+            size.height,
+            work_area.position.x,
+            work_area.position.y,
+            work_area.size.width,
+            work_area.size.height,
+        )
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn rectangles_overlap(
+    left_x: i32,
+    left_y: i32,
+    left_width: u32,
+    left_height: u32,
+    right_x: i32,
+    right_y: i32,
+    right_width: u32,
+    right_height: u32,
+) -> bool {
+    let overlap_width = (i64::from(left_x) + i64::from(left_width))
+        .min(i64::from(right_x) + i64::from(right_width))
+        - i64::from(left_x.max(right_x));
+    let overlap_height = (i64::from(left_y) + i64::from(left_height))
+        .min(i64::from(right_y) + i64::from(right_height))
+        - i64::from(left_y.max(right_y));
+    overlap_width >= 64 && overlap_height >= 64
 }
 
 fn sanitize_preferences(mut preferences: UserPreferences) -> UserPreferences {
@@ -674,5 +734,13 @@ mod tests {
             sanitized.colors.light_card_background,
             DEFAULT_LIGHT_CARD_BACKGROUND
         );
+    }
+
+    #[test]
+    fn window_visibility_requires_a_draggable_area_on_screen() {
+        assert!(rectangles_overlap(100, 100, 800, 600, 0, 0, 1_920, 1_080));
+        assert!(!rectangles_overlap(
+            1_900, 100, 800, 600, 0, 0, 1_920, 1_080
+        ));
     }
 }
