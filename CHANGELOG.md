@@ -4,6 +4,11 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Switched sensor IPC to a read-only named-pipe stream so ordinary clients can connect without broad pipe ACL mutation rights.
+
+- Moved hardware sensor collection into a protected per-machine Stats Panel Sensor service with read-only named-pipe IPC, automatic PawnIO repair, and no manual driver management.
+- Switched Windows NSIS installs to per-machine mode and pinned/verified the bundled PawnIO installer.
+- Bumped the app version to 0.2.35.
 - Preserved the main window's adjusted size and position while ignoring transient invalid geometry during display resets.
 - Restored off-screen windows onto the current primary display when the saved monitor is unavailable.
 - Bumped the app version to 0.2.33.

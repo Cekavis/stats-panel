@@ -6,18 +6,15 @@ import {
   Power,
   RefreshCw,
   RotateCcw,
-  ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
 import { Tabs } from "radix-ui";
 import { DASHBOARD_GROUPS } from "../dashboardGroups";
-import { needsIntegratedSensorDriver } from "../metrics";
 import { DEFAULT_THEME_COLORS } from "../theme";
 import type { AppUpdateState } from "../updates";
 import type {
   AppearancePreference,
   MetricDefinition,
-  MetricSample,
   ProviderStatus,
   ThemeColors,
   UserPreferences,
@@ -38,19 +35,14 @@ type SettingsViewProps = {
   onCheckForUpdates: () => void;
   onColorsChange: (value: ThemeColors) => void;
   onCompactChange: (value: boolean) => void;
-  onEnableSensorDriver: () => void;
   onIntervalChange: (value: number) => void;
   onRestartForUpdate: () => void;
-  onSensorHelp: () => void;
   onStartupChange: (value: boolean) => void;
   onToggleChart: (id: string) => void;
   onToggleVisible: (id: string) => void;
   onTopChange: (value: boolean) => void;
   preferences: UserPreferences;
   providers: ProviderStatus[];
-  samples: MetricSample[];
-  sensorDriverBusy: boolean;
-  sensorNote: string;
   updateState: AppUpdateState;
 };
 
@@ -84,24 +76,18 @@ export function SettingsView({
   onCheckForUpdates,
   onColorsChange,
   onCompactChange,
-  onEnableSensorDriver,
   onIntervalChange,
   onRestartForUpdate,
-  onSensorHelp,
   onStartupChange,
   onToggleChart,
   onToggleVisible,
   onTopChange,
   preferences,
   providers,
-  samples,
-  sensorDriverBusy,
-  sensorNote,
   updateState,
 }: SettingsViewProps) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
-  const needsSensorDriver = needsIntegratedSensorDriver(samples);
   const metricsByGroup = getSettingsMetricGroups(manifest);
   const updateBusy = ["checking", "downloading", "installing"].includes(updateState.status);
   const updateLabel = getUpdateLabel(updateState);
@@ -322,12 +308,6 @@ export function SettingsView({
                   <h2>Data Sources</h2>
                 </div>
                 <div className="provider-list">
-                  {needsSensorDriver ? (
-                    <div className="sensor-driver-notice">
-                      <ShieldCheck size={16} />
-                      <span>CPU temperature and power need the integrated sensor driver.</span>
-                    </div>
-                  ) : null}
                   {providers.length === 0 ? (
                     <p className="muted-copy">Waiting for telemetry providers...</p>
                   ) : (
@@ -346,20 +326,6 @@ export function SettingsView({
                     ))
                   )}
                 </div>
-                <div className="sensor-actions">
-                  <button className="text-button" type="button" onClick={onSensorHelp}>
-                    Sensor access
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={sensorDriverBusy}
-                    type="button"
-                    onClick={onEnableSensorDriver}
-                  >
-                    {sensorDriverBusy ? "Opening installer..." : "Enable integrated sensor driver"}
-                  </button>
-                </div>
-                {sensorNote ? <p className="muted-copy">{sensorNote}</p> : null}
               </section>
             </Tabs.Content>
           </section>

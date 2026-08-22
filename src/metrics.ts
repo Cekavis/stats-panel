@@ -33,17 +33,6 @@ export function pairedMetricId(id: string) {
   return "";
 }
 
-export function needsIntegratedSensorDriver(samples: MetricSample[]) {
-  const cpuTemperature = samples.find((sample) => sample.id === "cpu.temperature");
-  const cpuPower = samples.find((sample) => sample.id === "cpu.power");
-
-  return [cpuTemperature, cpuPower].some(
-    (sample) =>
-      sample?.status === "unavailable" &&
-      sample.message?.includes("integrated sensor driver"),
-  );
-}
-
 export function getCpuCoreUsages(sampleById: Map<string, MetricSample>): CpuCoreUsage[] {
   const corePattern = /^cpu\.core\.(\d+)\.usage$/;
 

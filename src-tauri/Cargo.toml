@@ -1,6 +1,6 @@
 [package]
 name = "stats-panel"
-version = "0.2.33"
+version = "0.2.35"
 description = "A compact Windows performance monitor for a secondary display."
 authors = ["cekav"]
 edition = "2021"
@@ -26,7 +26,6 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
-tauri-plugin-shell = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"

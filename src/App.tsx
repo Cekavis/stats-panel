@@ -6,8 +6,6 @@ import { SettingsView } from "./components/SettingsView";
 import {
   getMetricsManifest,
   getPreferences,
-  installIntegratedSensorDriver,
-  requestSensorPermissions,
   savePreferences,
 } from "./tauri";
 import {
@@ -36,8 +34,6 @@ function App() {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [snapshot, setSnapshot] = useState<TelemetrySnapshot | null>(null);
   const [history, setHistory] = useState<History>({});
-  const [sensorNote, setSensorNote] = useState("");
-  const [sensorDriverBusy, setSensorDriverBusy] = useState(false);
   const [updateState, setUpdateState] = useState<AppUpdateState>(INITIAL_UPDATE_STATE);
   const [error, setError] = useState("");
 
@@ -242,22 +238,6 @@ function App() {
     });
   }
 
-  async function showSensorHelp() {
-    setSensorNote(await requestSensorPermissions());
-  }
-
-  async function enableSensorDriver() {
-    setSensorDriverBusy(true);
-    setSensorNote("Starting the integrated sensor driver installer...");
-    try {
-      setSensorNote(await installIntegratedSensorDriver());
-    } catch (nextError) {
-      setSensorNote(String(nextError));
-    } finally {
-      setSensorDriverBusy(false);
-    }
-  }
-
   async function checkForUpdates() {
     await checkAndInstallUpdate(setUpdateState);
   }
@@ -305,18 +285,13 @@ function App() {
         manifest={manifest}
         preferences={preferences}
         providers={snapshot?.providers ?? []}
-        samples={snapshot?.samples ?? []}
-        sensorDriverBusy={sensorDriverBusy}
-        sensorNote={sensorNote}
         onAppearanceChange={updateAppearance}
         onChartHistoryChange={updateChartHistory}
         onCheckForUpdates={checkForUpdates}
         onColorsChange={updateColors}
         onCompactChange={(compact) => updateWindow("compact", compact)}
-        onEnableSensorDriver={enableSensorDriver}
         onIntervalChange={updateInterval}
         onRestartForUpdate={restartForUpdate}
-        onSensorHelp={showSensorHelp}
         onStartupChange={updateStartup}
         onToggleChart={toggleChart}
         onToggleVisible={toggleVisible}
@@ -330,10 +305,8 @@ function App() {
     <DashboardView
       history={history}
       metricById={metricById}
-      onEnableSensorDriver={enableSensorDriver}
       preferences={preferences}
       sampleById={sampleById}
-      sensorDriverBusy={sensorDriverBusy}
     />
   );
 }

@@ -16,11 +16,3 @@ export function savePreferences(preferences: UserPreferences) {
 export function setWindowPreferences(window: WindowPreferences) {
   return invoke<WindowPreferences>("set_window_preferences", { window });
 }
-
-export function requestSensorPermissions() {
-  return invoke<string>("request_sensor_permissions");
-}
-
-export function installIntegratedSensorDriver() {
-  return invoke<string>("install_integrated_sensor_driver");
-}

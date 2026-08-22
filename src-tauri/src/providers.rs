@@ -5,15 +5,20 @@ use nvml_wrapper::enum_wrappers::device::{Clock, ClockId, TemperatureSensor};
 use nvml_wrapper::{Device, Nvml};
 use serde::Deserialize;
 use std::sync::{Arc, Mutex};
-use sysinfo::{Disks, Networks, System};
-use tauri::AppHandle;
-use tauri_plugin_shell::{
-    process::{CommandChild, CommandEvent},
-    ShellExt,
+#[cfg(windows)]
+use std::{
+    fs::OpenOptions,
+    io::{BufRead, BufReader},
+    sync::atomic::{AtomicU64, Ordering},
+    thread,
+    time::Duration,
 };
+use sysinfo::{Disks, Networks, System};
 
 const SENSOR_HELPER_MESSAGE: &str =
-    "Bundled sensor helper is unavailable. CPU, GPU, and disk sensors cannot be read.";
+    "Stats Panel Sensor service is unavailable. CPU, GPU, and disk sensors cannot be read.";
+#[cfg(windows)]
+const SENSOR_PIPE_PATH: &str = r"\\.\pipe\StatsPanel.Sensor.v1";
 
 pub struct TelemetryCollector {
     system: System,
@@ -293,17 +298,22 @@ impl TelemetryCollector {
             Ok(reading) => {
                 statuses.push(provider_status(
                     "bundled-sensor-helper",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     true,
                     &reading.message,
                 ));
+                let sensor_health_state = if reading.health_state.is_empty() {
+                    &reading.sensor_driver_state
+                } else {
+                    &reading.health_state
+                };
                 push_optional_sensor(
                     samples,
                     "cpu.temperature",
                     "℃",
                     timestamp,
                     reading.cpu_temperature,
-                    &missing_cpu_sensor_message("CPU temperature", &reading.sensor_driver_state),
+                    &missing_cpu_sensor_message("CPU temperature", sensor_health_state),
                 );
                 push_optional_sensor(
                     samples,
@@ -311,7 +321,7 @@ impl TelemetryCollector {
                     "W",
                     timestamp,
                     reading.cpu_power,
-                    &missing_cpu_sensor_message("CPU power", &reading.sensor_driver_state),
+                    &missing_cpu_sensor_message("CPU power", sensor_health_state),
                 );
                 push_optional_sensor(
                     samples,
@@ -369,42 +379,42 @@ impl TelemetryCollector {
             Err(message) => {
                 statuses.push(provider_status(
                     "bundled-sensor-helper",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     false,
                     &message,
                 ));
                 samples.push(unavailable_sample(
                     "cpu.temperature",
                     "℃",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     timestamp,
                     message.clone(),
                 ));
                 samples.push(unavailable_sample(
                     "cpu.power",
                     "W",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     timestamp,
                     message.clone(),
                 ));
                 samples.push(unavailable_sample(
                     "cpu.fan_speed",
                     "RPM",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     timestamp,
                     message.clone(),
                 ));
                 samples.push(unavailable_sample(
                     "gpu.fan_speed",
                     "RPM",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     timestamp,
                     message.clone(),
                 ));
                 samples.push(unavailable_sample(
                     "disk.temperature",
                     "℃",
-                    "Bundled Sensor Helper",
+                    "Stats Panel Sensor",
                     timestamp,
                     message,
                 ));
@@ -416,7 +426,8 @@ impl TelemetryCollector {
 #[derive(Clone)]
 pub struct HardwareMonitorProvider {
     state: Arc<Mutex<HardwareMonitorState>>,
-    child: Arc<Mutex<Option<CommandChild>>>,
+    #[cfg(windows)]
+    worker_generation: Arc<AtomicU64>,
 }
 
 #[derive(Clone)]
@@ -439,6 +450,7 @@ struct HardwareReading {
     gpu_fan_speed: Option<f64>,
     disk_temperature: Option<f64>,
     sensor_driver_state: String,
+    health_state: String,
     message: String,
 }
 
@@ -457,9 +469,9 @@ struct HelperReading {
     gpu_fan_speed: Option<f64>,
     disk_temperature: Option<f64>,
     #[serde(default)]
-    sensor_driver_installed: bool,
-    #[serde(default)]
     sensor_driver_state: String,
+    #[serde(default)]
+    health_state: String,
     message: String,
 }
 
@@ -475,7 +487,8 @@ impl HardwareMonitorProvider {
                 },
                 message,
             })),
-            child: Arc::new(Mutex::new(None)),
+            #[cfg(windows)]
+            worker_generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -483,7 +496,7 @@ impl HardwareMonitorProvider {
         let state = self
             .state
             .lock()
-            .map_err(|error| format!("Bundled sensor helper state is unavailable: {error}"))?;
+            .map_err(|error| format!("Stats Panel Sensor state is unavailable: {error}"))?;
 
         if state.available {
             Ok(state.reading.clone())
@@ -511,6 +524,7 @@ impl HardwareMonitorProvider {
             gpu_fan_speed: reading.gpu_fan_speed,
             disk_temperature: reading.disk_temperature,
             sensor_driver_state: sensor_driver_state(&reading),
+            health_state: reading.health_state,
             message: reading.message,
         };
     }
@@ -530,50 +544,20 @@ impl HardwareMonitorProvider {
     }
 
     pub fn stop(&self) {
-        let Ok(mut child) = self.child.lock() else {
-            return;
-        };
-
-        if let Some(child) = child.take() {
-            let _ = child.kill();
-        }
-    }
-
-    pub fn restart(&self, app: &AppHandle) {
-        self.stop();
-        self.set_unavailable("Bundled sensor helper is restarting after sensor driver setup.");
-        launch_hardware_monitor_helper(app, self);
-    }
-
-    fn store_child(&self, child: CommandChild) {
-        let Ok(mut current) = self.child.lock() else {
-            let _ = child.kill();
-            return;
-        };
-
-        if let Some(previous) = current.replace(child) {
-            let _ = previous.kill();
-        }
-    }
-
-    fn clear_child(&self) {
-        let Ok(mut child) = self.child.lock() else {
-            return;
-        };
-
-        let _ = child.take();
+        #[cfg(windows)]
+        self.worker_generation.fetch_add(1, Ordering::AcqRel);
     }
 }
 
-pub fn start_hardware_monitor_helper(app: &AppHandle) -> HardwareMonitorProvider {
+pub fn start_hardware_monitor_helper() -> HardwareMonitorProvider {
     let provider = HardwareMonitorProvider::unavailable(SENSOR_HELPER_MESSAGE);
 
-    launch_hardware_monitor_helper(app, &provider);
+    launch_hardware_monitor_helper(&provider);
 
     provider
 }
 
-fn launch_hardware_monitor_helper(app: &AppHandle, provider: &HardwareMonitorProvider) {
+fn launch_hardware_monitor_helper(provider: &HardwareMonitorProvider) {
     #[cfg(not(windows))]
     {
         provider.set_unavailable(SENSOR_HELPER_MESSAGE);
@@ -581,68 +565,67 @@ fn launch_hardware_monitor_helper(app: &AppHandle, provider: &HardwareMonitorPro
 
     #[cfg(windows)]
     {
-        let command = match app.shell().sidecar("stats-sensor-helper") {
-            Ok(command) => command,
-            Err(error) => {
-                provider.set_unavailable(format!("Bundled sensor helper is missing: {error}"));
-                return;
-            }
-        }
-        .args([format!("--parent-pid={}", std::process::id())]);
-
-        let (mut rx, child) = match command.spawn() {
-            Ok(process) => process,
-            Err(error) => {
-                provider.set_unavailable(format!("Bundled sensor helper could not start: {error}"));
-                return;
-            }
-        };
-        provider.store_child(child);
-
+        let generation = provider.worker_generation.fetch_add(1, Ordering::AcqRel) + 1;
         let task_provider = provider.clone();
-        tauri::async_runtime::spawn(async move {
-            while let Some(event) = rx.recv().await {
-                match event {
-                    CommandEvent::Stdout(line) => {
-                        let text = String::from_utf8_lossy(&line);
-                        let text = text.trim();
-                        if text.is_empty() {
-                            continue;
-                        }
-                        match parse_helper_reading(text) {
-                            Ok(reading) => task_provider.apply_helper_reading(reading),
-                            Err(error) => task_provider.set_unavailable(error),
-                        }
-                    }
-                    CommandEvent::Stderr(line) => {
-                        let text = String::from_utf8_lossy(&line);
-                        let text = text.trim();
-                        if !text.is_empty() {
-                            task_provider
-                                .set_unavailable(format!("Bundled sensor helper error: {text}"));
-                        }
-                    }
-                    CommandEvent::Error(error) => {
-                        task_provider
-                            .set_unavailable(format!("Bundled sensor helper error: {error}"));
-                    }
-                    CommandEvent::Terminated(payload) => {
-                        task_provider.set_unavailable(format!(
-                            "Bundled sensor helper stopped with code {:?}.",
-                            payload.code
-                        ));
-                        task_provider.clear_child();
-                    }
-                    _ => {}
+        thread::spawn(move || {
+            while task_provider.worker_generation.load(Ordering::Acquire) == generation {
+                match subscribe_to_sensor_service(&task_provider, generation) {
+                    Ok(()) => task_provider
+                        .set_unavailable("Stats Panel Sensor service disconnected. Reconnecting."),
+                    Err(error) => task_provider.set_unavailable(error),
                 }
+
+                sleep_while_current(&task_provider, generation);
             }
         });
     }
 }
 
+#[cfg(windows)]
+fn subscribe_to_sensor_service(
+    provider: &HardwareMonitorProvider,
+    generation: u64,
+) -> Result<(), String> {
+    let pipe = OpenOptions::new()
+        .read(true)
+        .open(SENSOR_PIPE_PATH)
+        .map_err(|error| format!("Stats Panel Sensor service is unavailable: {error}"))?;
+
+    let mut reader = BufReader::new(pipe);
+    let mut line = String::new();
+    while provider.worker_generation.load(Ordering::Acquire) == generation {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => return Ok(()),
+            Ok(_) if line.trim().is_empty() => continue,
+            Ok(_) => match parse_helper_reading(line.trim()) {
+                Ok(reading) => provider.apply_helper_reading(reading),
+                Err(error) => return Err(error),
+            },
+            Err(error) => {
+                return Err(format!(
+                    "Could not read from Stats Panel Sensor service: {error}"
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(windows)]
+fn sleep_while_current(provider: &HardwareMonitorProvider, generation: u64) {
+    for _ in 0..20 {
+        if provider.worker_generation.load(Ordering::Acquire) != generation {
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 fn parse_helper_reading(line: &str) -> Result<HelperReading, String> {
     serde_json::from_str::<HelperReading>(line)
-        .map_err(|error| format!("Bundled sensor helper returned invalid data: {error}"))
+        .map_err(|error| format!("Stats Panel Sensor returned invalid data: {error}"))
 }
 
 fn push_nvml_metric(
@@ -681,17 +664,11 @@ fn push_optional_sensor(
     fallback_message: &str,
 ) {
     match value {
-        Some(value) => samples.push(ok_sample(
-            id,
-            value,
-            unit,
-            "Bundled Sensor Helper",
-            timestamp,
-        )),
+        Some(value) => samples.push(ok_sample(id, value, unit, "Stats Panel Sensor", timestamp)),
         None => samples.push(unavailable_sample(
             id,
             unit,
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             timestamp,
             fallback_message,
         )),
@@ -703,23 +680,28 @@ fn sensor_driver_state(reading: &HelperReading) -> String {
         return reading.sensor_driver_state.clone();
     }
 
-    if reading.sensor_driver_installed {
-        "installed".to_string()
-    } else {
-        "missing".to_string()
-    }
+    "unknown".to_string()
 }
 
 fn missing_cpu_sensor_message(label: &str, sensor_driver_state: &str) -> String {
     match sensor_driver_state {
-        "installed" => format!(
-            "{label} sensor not found. PawnIO is installed, but this hardware, firmware, or the current sensor library may not expose that reading."
+        "ready" | "installed" => format!(
+            "{label} sensor not found. Low-level access is ready, but this hardware, firmware, Windows build, or sensor library may not expose that reading."
         ),
-        "registered" => format!(
-            "{label} sensor not found. PawnIO was uninstalled, but its driver registration still remains on this system."
+        "reboot_required" | "rebootRequired" => format!(
+            "{label} sensor is unavailable until Windows is restarted to finish sensor service setup."
+        ),
+        "access_denied" | "device_denied" => format!(
+            "{label} sensor is unavailable because the sensor service cannot open the low-level device."
+        ),
+        "sensor_value_zero" => format!(
+            "{label} sensor library returned no usable value on this Windows build or hardware."
+        ),
+        "degraded" | "not_found" | "open_failed" => format!(
+            "{label} sensor is unavailable; the sensor service reported a low-level access or hardware limitation."
         ),
         _ => format!(
-            "{label} sensor not found. Enable the integrated sensor driver if this hardware requires low-level access."
+            "{label} sensor not found. Stats Panel Sensor service will repair low-level access during installation or update."
         ),
     }
 }
@@ -734,7 +716,7 @@ fn push_helper_sensor_if_available(
     if let Some(value) = value {
         upsert_sample(
             samples,
-            ok_sample(id, value, unit, "Bundled Sensor Helper", timestamp),
+            ok_sample(id, value, unit, "Stats Panel Sensor", timestamp),
         );
     }
 }
@@ -827,7 +809,7 @@ mod tests {
     #[test]
     fn helper_reading_parses_camel_case_json() {
         let reading = parse_helper_reading(
-            r#"{"available":true,"cpuFrequency":4288.5,"cpuTemperature":61.5,"cpuPower":44.25,"cpuFanSpeed":1857.0,"gpuCoreClock":2415.0,"gpuMemoryClock":10501.0,"gpuTemperature":55.0,"gpuPower":128.5,"gpuFanSpeed":1240.0,"message":"online","timestamp":1}"#,
+            r#"{"available":true,"cpuFrequency":4288.5,"cpuTemperature":61.5,"cpuPower":44.25,"cpuFanSpeed":1857.0,"gpuCoreClock":2415.0,"gpuMemoryClock":10501.0,"gpuTemperature":55.0,"gpuPower":128.5,"gpuFanSpeed":1240.0,"healthState":"ready","message":"online","timestamp":1}"#,
         )
         .expect("helper JSON should parse");
 
@@ -842,6 +824,7 @@ mod tests {
         assert_eq!(reading.gpu_power, Some(128.5));
         assert_eq!(reading.gpu_fan_speed, Some(1240.0));
         assert_eq!(reading.disk_temperature, None);
+        assert_eq!(reading.health_state, "ready");
         assert_eq!(reading.message, "online");
     }
 

@@ -9,14 +9,7 @@ use preferences::{
     DEFAULT_MEMORY_COLOR, DEFAULT_NETWORK_COLOR,
 };
 use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, TelemetryCollector};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::Mutex,
-    thread,
-    time::Duration,
-};
+use std::{sync::Mutex, thread, time::Duration};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
     LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
@@ -97,229 +90,6 @@ fn set_window_preferences(
     Ok(preferences.window)
 }
 
-#[tauri::command]
-fn request_sensor_permissions() -> String {
-    "Stats Panel can enable an integrated sensor driver to read CPU temperature and power on hardware that requires low-level access. If sensors stay unavailable after enabling it, the hardware, firmware, or current sensor library may not expose those readings.".to_string()
-}
-
-#[tauri::command]
-fn install_integrated_sensor_driver(
-    app: AppHandle,
-    hardware_monitor: State<'_, HardwareMonitorProvider>,
-) -> Result<String, String> {
-    let result = install_integrated_sensor_driver_impl(&app)?;
-    hardware_monitor.restart(&app);
-
-    match result {
-        SensorDriverInstallResult::AlreadyInstalled => Ok("Integrated sensor driver is already installed. Stats Panel is reconnecting to the bundled sensor helper.".to_string()),
-        SensorDriverInstallResult::Installed => Ok("Integrated sensor driver installer finished. Stats Panel is reconnecting to the bundled sensor helper.".to_string()),
-        SensorDriverInstallResult::DriverRegistrationRemains => Ok("PawnIO was uninstalled, but its driver registration still remains. Restart Windows or remove the residual PawnIO driver registration before installing it again.".to_string()),
-    }
-}
-
-enum SensorDriverInstallResult {
-    AlreadyInstalled,
-    Installed,
-    DriverRegistrationRemains,
-}
-
-#[cfg(windows)]
-fn install_integrated_sensor_driver_impl(
-    app: &AppHandle,
-) -> Result<SensorDriverInstallResult, String> {
-    let install_state = pawnio_install_state();
-    match install_state {
-        PawnIoInstallState::Registered => {
-            return Ok(SensorDriverInstallResult::DriverRegistrationRemains);
-        }
-        PawnIoInstallState::Installed | PawnIoInstallState::Missing => {}
-    }
-
-    run_elevated_sensor_driver_setup(app, install_state)?;
-
-    Ok(match install_state {
-        PawnIoInstallState::Installed => SensorDriverInstallResult::AlreadyInstalled,
-        PawnIoInstallState::Missing => SensorDriverInstallResult::Installed,
-        PawnIoInstallState::Registered => SensorDriverInstallResult::DriverRegistrationRemains,
-    })
-}
-
-#[cfg(windows)]
-fn run_elevated_sensor_driver_setup(
-    app: &AppHandle,
-    install_state: PawnIoInstallState,
-) -> Result<(), String> {
-    let installer = match install_state {
-        PawnIoInstallState::Missing => Some(resolve_pawnio_installer(app)?),
-        PawnIoInstallState::Installed | PawnIoInstallState::Registered => None,
-    };
-    let script_path = std::env::temp_dir().join("stats-panel-sensor-driver-setup.ps1");
-    fs::write(&script_path, SENSOR_DRIVER_SETUP_SCRIPT)
-        .map_err(|error| format!("Could not prepare sensor driver setup script: {error}"))?;
-
-    let script = "$ErrorActionPreference = 'Stop'; $process = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$env:STATS_SENSOR_SETUP_SCRIPT) -Verb RunAs -Wait -PassThru; exit $process.ExitCode";
-    let status = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            script,
-        ])
-        .env("STATS_SENSOR_SETUP_SCRIPT", &script_path)
-        .env(
-            "STATS_PAWNIO_INSTALLER",
-            installer.as_deref().unwrap_or_else(|| Path::new("")),
-        )
-        .env("STATS_PAWNIO_INSTALL_STATE", install_state.as_str())
-        .status()
-        .map_err(|error| format!("Could not start the integrated sensor driver setup: {error}"))?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Integrated sensor driver setup exited with code {:?}.",
-            status.code()
-        ))
-    }
-}
-
-#[cfg(windows)]
-const SENSOR_DRIVER_SETUP_SCRIPT: &str = r#"
-$ErrorActionPreference = "Stop"
-
-if ($env:STATS_PAWNIO_INSTALL_STATE -eq "missing") {
-    $installer = $env:STATS_PAWNIO_INSTALLER
-    if (-not $installer -or -not (Test-Path -LiteralPath $installer)) {
-        Write-Error "PawnIO installer is missing."
-        exit 2
-    }
-
-    $process = Start-Process -FilePath $installer -Wait -PassThru
-    if ($process.ExitCode -ne 0) {
-        exit $process.ExitCode
-    }
-}
-
-$devicePath = "HKLM:\SYSTEM\CurrentControlSet\Enum\ROOT\PAWNIO\0000"
-if (Test-Path -LiteralPath $devicePath) {
-    $sddl = "D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;BU)"
-    $sd = [System.Security.AccessControl.RawSecurityDescriptor]::new($sddl)
-    $bytes = New-Object byte[] $sd.BinaryLength
-    $sd.GetBinaryForm($bytes, 0)
-    Set-ItemProperty -Path $devicePath -Name Security -Value $bytes
-
-    & pnputil.exe /restart-device "ROOT\PAWNIO\0000" | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        & sc.exe stop PawnIO | Out-Null
-        Start-Sleep -Seconds 1
-        & sc.exe start PawnIO | Out-Null
-    }
-}
-
-exit 0
-"#;
-
-#[cfg(not(windows))]
-fn install_integrated_sensor_driver_impl(
-    _app: &AppHandle,
-) -> Result<SensorDriverInstallResult, String> {
-    Err("The integrated sensor driver is only available on Windows.".to_string())
-}
-
-#[cfg(windows)]
-#[derive(Clone, Copy)]
-enum PawnIoInstallState {
-    Installed,
-    Registered,
-    Missing,
-}
-
-#[cfg(windows)]
-impl PawnIoInstallState {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Installed => "installed",
-            Self::Registered => "registered",
-            Self::Missing => "missing",
-        }
-    }
-}
-
-#[cfg(windows)]
-fn pawnio_install_state() -> PawnIoInstallState {
-    if [
-        r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
-        r"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\PawnIO",
-    ]
-    .iter()
-    .any(|key| {
-        Command::new("reg")
-            .args(["query", key])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false)
-    }) {
-        return PawnIoInstallState::Installed;
-    }
-
-    if registry_key_exists(r"HKLM\SYSTEM\CurrentControlSet\Services\PawnIO") {
-        return PawnIoInstallState::Registered;
-    }
-
-    PawnIoInstallState::Missing
-}
-
-#[cfg(windows)]
-fn registry_key_exists(key: &str) -> bool {
-    Command::new("reg")
-        .args(["query", key])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-fn resolve_pawnio_installer(app: &AppHandle) -> Result<PathBuf, String> {
-    const INSTALLER_NAME: &str = "PawnIO_setup.exe";
-    let mut candidates = Vec::new();
-
-    if let Ok(resource_dir) = app.path().resource_dir() {
-        candidates.push(resource_dir.join(INSTALLER_NAME));
-        candidates.push(resource_dir.join("binaries").join(INSTALLER_NAME));
-    }
-
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            candidates.push(exe_dir.join(INSTALLER_NAME));
-            candidates.push(exe_dir.join("resources").join(INSTALLER_NAME));
-            candidates.push(
-                exe_dir
-                    .join("resources")
-                    .join("binaries")
-                    .join(INSTALLER_NAME),
-            );
-        }
-    }
-
-    candidates.push(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("binaries")
-            .join(INSTALLER_NAME),
-    );
-
-    candidates
-        .into_iter()
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            "Integrated sensor driver installer is missing. Rebuild Stats Panel to include PawnIO_setup.exe.".to_string()
-        })
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -327,7 +97,6 @@ pub fn run() {
             show_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
@@ -347,7 +116,7 @@ pub fn run() {
             let _ = apply_startup_preference(&app_handle, preferences.launch_at_startup);
             setup_window_events(app);
             setup_tray(app)?;
-            let hardware_monitor = start_hardware_monitor_helper(&app_handle);
+            let hardware_monitor = start_hardware_monitor_helper();
             app.manage(hardware_monitor.clone());
             start_telemetry_loop(app_handle, hardware_monitor);
 
@@ -357,9 +126,7 @@ pub fn run() {
             get_metrics_manifest,
             get_preferences,
             save_preferences,
-            set_window_preferences,
-            request_sensor_permissions,
-            install_integrated_sensor_driver
+            set_window_preferences
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

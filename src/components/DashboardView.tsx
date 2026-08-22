@@ -1,4 +1,3 @@
-import { ShieldCheck } from "lucide-react";
 import { DASHBOARD_GROUPS } from "../dashboardGroups";
 import {
   buildAreaPath,
@@ -9,7 +8,6 @@ import {
   formatSample,
   getChartDomain,
   getCpuCoreUsages,
-  needsIntegratedSensorDriver,
   pairedMetricId,
 } from "../metrics";
 import type { CpuCoreUsage, History, HistoryPoint } from "../metrics";
@@ -18,19 +16,15 @@ import type { MetricCategory, MetricDefinition, MetricSample, UserPreferences } 
 type DashboardViewProps = {
   history: History;
   metricById: Map<string, MetricDefinition>;
-  onEnableSensorDriver: () => void;
   preferences: UserPreferences;
   sampleById: Map<string, MetricSample>;
-  sensorDriverBusy: boolean;
 };
 
 export function DashboardView({
   history,
   metricById,
-  onEnableSensorDriver,
   preferences,
   sampleById,
-  sensorDriverBusy,
 }: DashboardViewProps) {
   const visible = new Set(preferences.visibleMetricIds);
   const charted = new Set(preferences.chartMetricIds);
@@ -40,7 +34,6 @@ export function DashboardView({
       .map((point) => point.timestamp),
     Date.now(),
   );
-  const needsSensorDriver = needsIntegratedSensorDriver(Array.from(sampleById.values()));
   const cpuCoreUsages = getCpuCoreUsages(sampleById);
 
   return (
@@ -48,16 +41,6 @@ export function DashboardView({
       className={`dashboard-shell ${preferences.window.compact ? "is-compact" : ""}`}
       data-tauri-drag-region
     >
-      {needsSensorDriver ? (
-        <section className="sensor-driver-callout">
-          <ShieldCheck size={17} />
-          <span>CPU temperature and power need the integrated sensor driver.</span>
-          <button disabled={sensorDriverBusy} type="button" onClick={onEnableSensorDriver}>
-            {sensorDriverBusy ? "Opening..." : "Enable"}
-          </button>
-        </section>
-      ) : null}
-
       <section className="dashboard-grid" aria-label="Stats dashboard" data-tauri-drag-region>
         {DASHBOARD_GROUPS.map((group) => (
           <section

@@ -60,4 +60,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Copy-Item -Force (Join-Path $publishDir "stats-sensor-helper.exe") $sidecarPath
-Write-Host "Built sensor helper sidecar: $sidecarPath"
+Write-Host "Built Stats Panel sensor service: $sidecarPath"

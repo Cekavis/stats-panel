@@ -10,15 +10,36 @@ using Microsoft.Win32;
 var intervalMs = ParseInterval(args);
 var parentPid = ParseParentPid(args);
 var dumpSensors = args.Any(arg => string.Equals(arg, "--dump-sensors", StringComparison.OrdinalIgnoreCase));
-var computer = new Computer
+var serviceMode = args.Any(arg => string.Equals(arg, "--service", StringComparison.OrdinalIgnoreCase));
+var installService = args.Any(arg => string.Equals(arg, "--install-service", StringComparison.OrdinalIgnoreCase));
+var stopService = args.Any(arg => string.Equals(arg, "--stop-service", StringComparison.OrdinalIgnoreCase));
+var uninstallService = args.Any(arg => string.Equals(arg, "--uninstall-service", StringComparison.OrdinalIgnoreCase));
+
+if (installService)
 {
-    IsCpuEnabled = true,
-    IsGpuEnabled = true,
-    IsMotherboardEnabled = true,
-    IsControllerEnabled = true,
-    IsPowerMonitorEnabled = true,
-    IsStorageEnabled = true,
-};
+    Environment.ExitCode = SensorServiceRegistration.Install();
+    return;
+}
+
+if (stopService)
+{
+    Environment.ExitCode = SensorServiceRegistration.Stop();
+    return;
+}
+
+if (uninstallService)
+{
+    Environment.ExitCode = SensorServiceRegistration.Uninstall();
+    return;
+}
+
+if (serviceMode)
+{
+    SensorServiceHost.Run(CreateComputer, computer => ReadSensors(computer, SensorBrokerModes.Service));
+    return;
+}
+
+var computer = CreateComputer();
 
 try
 {
@@ -26,7 +47,7 @@ try
 }
 catch (Exception error)
 {
-    WriteReading(SensorReading.Unavailable(error.Message));
+    WriteReading(SensorReading.Unavailable(error.Message, SensorBrokerModes.Cli, SensorHealthStates.ModuleLoadFailed));
     return;
 }
 
@@ -50,11 +71,11 @@ try
         try
         {
             computer.Accept(new UpdateVisitor());
-            WriteReading(ReadSensors(computer));
+            WriteReading(ReadSensors(computer, SensorBrokerModes.Cli));
         }
         catch (Exception error)
         {
-            WriteReading(SensorReading.Unavailable(error.Message));
+            WriteReading(SensorReading.Unavailable(error.Message, SensorBrokerModes.Cli, SensorHealthStates.ModuleLoadFailed));
         }
 
         if (!once)
@@ -67,6 +88,19 @@ try
 finally
 {
     computer.Close();
+}
+
+static Computer CreateComputer()
+{
+    return new Computer
+    {
+        IsCpuEnabled = true,
+        IsGpuEnabled = true,
+        IsMotherboardEnabled = true,
+        IsControllerEnabled = true,
+        IsPowerMonitorEnabled = true,
+        IsStorageEnabled = true,
+    };
 }
 
 static int ParseInterval(string[] args)
@@ -115,7 +149,7 @@ static bool ParentProcessExited(int? parentPid)
     }
 }
 
-static SensorReading ReadSensors(Computer computer)
+static SensorReading ReadSensors(Computer computer, string brokerMode)
 {
     var sensors = EnumerateCpuSensors(computer.Hardware).ToList();
     var gpuSensors = SelectPrimaryGpuSensors(computer.Hardware);
@@ -211,22 +245,35 @@ static SensorReading ReadSensors(Computer computer)
         || gpuFanSpeed.HasValue
         || diskTemperature.HasValue;
     var missingCpuHardwareSensors = !cpuTemperature.HasValue || !cpuPower.HasValue;
-    var sensorDriverState = SensorDriverInfo.GetPawnIoState();
-    var sensorDriverInstalled = sensorDriverState == SensorDriverInfo.Installed;
-    var sensorDriverRegistered = sensorDriverState == SensorDriverInfo.Registered;
+    var registeredDriverState = SensorDriverInfo.GetPawnIoState();
+    var sensorDevice = SensorDriverInfo.ProbePawnIoDevice();
+    var sensorDriverInstalled = registeredDriverState == SensorDriverInfo.Installed;
+    var sensorDriverRegistered = registeredDriverState == SensorDriverInfo.Registered;
+    var healthState = sensorDevice.Accessible
+        ? missingCpuHardwareSensors
+            ? SensorHealthStates.SensorValueZero
+            : SensorHealthStates.Ready
+        : sensorDevice.State == SensorDeviceStates.AccessDenied
+                ? SensorHealthStates.DeviceDenied
+                : sensorDevice.State == SensorDeviceStates.NotFound
+                    ? SensorHealthStates.NotFound
+                : SensorHealthStates.DeviceUnavailable;
+    var sensorDriverState = SensorDriverInfo.GetLiveState(sensorDevice, healthState);
     var message = hasAnySensor
         ? missingCpuHardwareSensors
-            ? sensorDriverInstalled
-                ? "Bundled sensor helper online. PawnIO is installed, but CPU temperature or power sensors are still unavailable on this hardware."
+            ? sensorDevice.Accessible
+                ? "Stats Panel Sensor service online. PawnIO is accessible, but CPU temperature or power sensors are unavailable."
+                : sensorDriverInstalled
+                    ? "Stats Panel Sensor service online. PawnIO is installed, but its device is not accessible; the service will retry automatically."
                 : sensorDriverRegistered
-                    ? "Bundled sensor helper online. PawnIO was uninstalled, but its driver registration still remains; CPU temperature or power sensors are unavailable."
-                : "Bundled sensor helper online. Enable the integrated sensor driver to unlock CPU temperature and power when this hardware requires low-level access."
-            : "Bundled sensor helper online."
+                    ? "Stats Panel Sensor service online. Low-level sensor access is being repaired automatically."
+                : "Stats Panel Sensor service online. Low-level sensor access is being repaired automatically."
+            : "Stats Panel Sensor service online."
         : sensorDriverInstalled
             ? "PawnIO is installed, but CPU, GPU, and disk sensors were not found on this hardware."
             : sensorDriverRegistered
-                ? "PawnIO was uninstalled, but its driver registration still remains; CPU, GPU, and disk sensors were not found on this hardware."
-            : "CPU, GPU, and disk sensors were not found. Enable the integrated sensor driver if this hardware requires low-level access.";
+                ? "Low-level sensor access is being repaired automatically."
+            : "CPU, GPU, and disk sensors were not found; the sensor service will keep checking automatically.";
 
     return new SensorReading(
         true,
@@ -243,7 +290,15 @@ static SensorReading ReadSensors(Computer computer)
         sensorDriverInstalled,
         sensorDriverState,
         message,
-        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+        SensorProtocol.Version,
+        brokerMode,
+        healthState,
+        sensorDevice.Accessible,
+        sensorDevice.State,
+        sensorDevice.ErrorCode,
+        PawnIoRepairStates.None,
+        null);
 }
 
 static IEnumerable<ISensor> EnumerateCpuSensors(IEnumerable<IHardware> hardwareItems)
@@ -796,11 +851,23 @@ internal sealed record SensorReading(
     bool SensorDriverInstalled,
     string SensorDriverState,
     string Message,
-    long Timestamp)
+    long Timestamp,
+    int ProtocolVersion,
+    string BrokerMode,
+    string HealthState,
+    bool SensorDeviceAccessible,
+    string SensorDeviceState,
+    int? SensorDeviceErrorCode,
+    string PawnIoRepairState,
+    int? PawnIoRepairExitCode)
 {
-    public static SensorReading Unavailable(string message)
+    public static SensorReading Unavailable(
+        string message,
+        string brokerMode = SensorBrokerModes.Cli,
+        string healthState = SensorHealthStates.ModuleLoadFailed)
     {
-        var sensorDriverState = SensorDriverInfo.GetPawnIoState();
+        var registeredDriverState = SensorDriverInfo.GetPawnIoState();
+        var sensorDevice = SensorDriverInfo.ProbePawnIoDevice();
         return new SensorReading(
             false,
             null,
@@ -813,10 +880,38 @@ internal sealed record SensorReading(
             null,
             null,
             null,
-            sensorDriverState == SensorDriverInfo.Installed,
-            sensorDriverState,
+            registeredDriverState == SensorDriverInfo.Installed,
+            SensorDriverInfo.GetLiveState(sensorDevice, healthState),
             message,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+            SensorProtocol.Version,
+            brokerMode,
+            healthState,
+            sensorDevice.Accessible,
+            sensorDevice.State,
+            sensorDevice.ErrorCode,
+            PawnIoRepairStates.None,
+            null);
+    }
+
+    public SensorReading WithRepair(PawnIoRepairResult repair)
+    {
+        if (string.Equals(repair.State, PawnIoRepairStates.None, StringComparison.Ordinal))
+        {
+            return this;
+        }
+
+        var rebootRequired = string.Equals(repair.State, PawnIoRepairStates.RebootRequired, StringComparison.Ordinal);
+        return this with
+        {
+            SensorDriverState = rebootRequired ? SensorHealthStates.RebootRequired : SensorDriverState,
+            HealthState = rebootRequired ? SensorHealthStates.RebootRequired : HealthState,
+            Message = rebootRequired
+                ? "PawnIO was installed, but Windows requires a restart before CPU sensors can be read."
+                : Message,
+            PawnIoRepairState = repair.State,
+            PawnIoRepairExitCode = repair.ExitCode,
+        };
     }
 }
 
@@ -826,6 +921,8 @@ internal static class SensorDriverInfo
     public const string Registered = "registered";
     public const string Missing = "missing";
 
+    private const string PawnIoDevicePath = @"\\?\GLOBALROOT\Device\PawnIO";
+
     public static string GetPawnIoState()
     {
         if (HasPawnIoUninstallEntry())
@@ -834,6 +931,55 @@ internal static class SensorDriverInfo
         }
 
         return HasPawnIoServiceKey() ? Registered : Missing;
+    }
+
+    public static SensorDeviceProbe ProbePawnIoDevice()
+    {
+        using var device = NativeMethods.CreateFile(
+            PawnIoDevicePath,
+            NativeMethods.GenericRead | NativeMethods.GenericWrite,
+            NativeMethods.FileShareRead | NativeMethods.FileShareWrite,
+            IntPtr.Zero,
+            NativeMethods.OpenExisting,
+            0,
+            IntPtr.Zero);
+
+        if (!device.IsInvalid)
+        {
+            return new SensorDeviceProbe(true, SensorDeviceStates.Ready, null);
+        }
+
+        var errorCode = Marshal.GetLastWin32Error();
+        var state = errorCode switch
+        {
+            NativeMethods.ErrorAccessDenied => SensorDeviceStates.AccessDenied,
+            NativeMethods.ErrorFileNotFound or NativeMethods.ErrorPathNotFound => SensorDeviceStates.NotFound,
+            _ => SensorDeviceStates.OpenFailed,
+        };
+
+        return new SensorDeviceProbe(false, state, errorCode);
+    }
+
+    public static string GetLiveState(SensorDeviceProbe device, string healthState)
+    {
+        if (string.Equals(healthState, SensorHealthStates.RebootRequired, StringComparison.Ordinal))
+        {
+            return SensorHealthStates.RebootRequired;
+        }
+
+        if (device.Accessible)
+        {
+            return string.Equals(healthState, SensorHealthStates.Ready, StringComparison.Ordinal)
+                ? SensorHealthStates.Ready
+                : SensorHealthStates.Degraded;
+        }
+
+        return device.State switch
+        {
+            SensorDeviceStates.AccessDenied => SensorHealthStates.AccessDenied,
+            SensorDeviceStates.NotFound => SensorHealthStates.NotFound,
+            _ => SensorHealthStates.OpenFailed,
+        };
     }
 
     private static bool HasPawnIoServiceKey()
@@ -871,6 +1017,42 @@ internal static class SensorDriverInfo
     }
 }
 
+internal static class SensorProtocol
+{
+    public const int Version = 1;
+}
+
+internal static class SensorBrokerModes
+{
+    public const string Cli = "cli";
+    public const string Service = "service";
+}
+
+internal static class SensorHealthStates
+{
+    public const string Ready = "ready";
+    public const string DriverMissing = "driver_missing";
+    public const string Degraded = "degraded";
+    public const string AccessDenied = "access_denied";
+    public const string NotFound = "not_found";
+    public const string OpenFailed = "open_failed";
+    public const string RebootRequired = "reboot_required";
+    public const string DeviceDenied = AccessDenied;
+    public const string DeviceUnavailable = OpenFailed;
+    public const string ModuleLoadFailed = "module_load_failed";
+    public const string SensorValueZero = "sensor_value_zero";
+}
+
+internal static class SensorDeviceStates
+{
+    public const string Ready = "ready";
+    public const string AccessDenied = "access_denied";
+    public const string NotFound = "not_found";
+    public const string OpenFailed = "open_failed";
+}
+
+internal sealed record SensorDeviceProbe(bool Accessible, string State, int? ErrorCode);
+
 internal sealed class UpdateVisitor : IVisitor
 {
     public void VisitComputer(IComputer computer)
@@ -906,6 +1088,8 @@ internal sealed record SensorValue(string Name, double Value);
 
 internal static class NativeMethods
 {
+    public const uint GenericRead = 0x80000000;
+    public const uint GenericWrite = 0x40000000;
     public const uint FileShareRead = 0x00000001;
     public const uint FileShareWrite = 0x00000002;
     public const uint OpenExisting = 3;
@@ -916,6 +1100,9 @@ internal static class NativeMethods
     public const uint ProtocolTypeNvme = 3;
     public const uint NvmeDataTypeLogPage = 2;
     public const uint NvmeSmartHealthLogPage = 2;
+    public const int ErrorFileNotFound = 2;
+    public const int ErrorPathNotFound = 3;
+    public const int ErrorAccessDenied = 5;
 
     [DllImport("kernel32.dll", EntryPoint = "CreateFileW", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern SafeFileHandle CreateFile(

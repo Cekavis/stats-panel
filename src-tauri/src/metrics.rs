@@ -77,7 +77,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "CPU Temperature",
             MetricCategory::Cpu,
             "℃",
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             1,
         ),
         metric(
@@ -85,7 +85,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "CPU Power",
             MetricCategory::Cpu,
             "W",
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             1,
         ),
         metric(
@@ -93,7 +93,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "CPU Fan",
             MetricCategory::Cpu,
             "RPM",
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             0,
         ),
         metric(
@@ -142,7 +142,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "GPU Fan",
             MetricCategory::Gpu,
             "RPM",
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             0,
         ),
         metric(
@@ -206,7 +206,7 @@ pub fn metric_manifest() -> Vec<MetricDefinition> {
             "Disk Temperature",
             MetricCategory::Disk,
             "℃",
-            "Bundled Sensor Helper",
+            "Stats Panel Sensor",
             1,
         ),
     ]
