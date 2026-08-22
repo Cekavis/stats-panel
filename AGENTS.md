@@ -6,16 +6,14 @@ Stats Panel is a Windows-focused Tauri v2 desktop app. The React/TypeScript UI l
 
 ## Build, Test, and Development Commands
 
-Use `rtk` before shell commands in this repo.
-
-- `rtk npm install`: install frontend and Tauri CLI dependencies.
-- `rtk npm run dev`: start the Vite frontend only.
-- `rtk npm run tauri dev`: run the desktop app locally.
-- `rtk npm run build`: type-check and build the frontend.
-- `rtk cargo test` from `src-tauri/`: run Rust unit tests.
-- `rtk cargo clippy --all-targets -- -D warnings` from `src-tauri/`: enforce Rust lint cleanliness.
-- `rtk npm run tauri build`: build the release desktop executable and installer bundles.
-- `rtk powershell -NoProfile -ExecutionPolicy Bypass -File .codex-local\finish-task-install.ps1`: at the end of each task, build the latest release installer and install it locally without deleting existing app data. Local installs should use release packages only unless the user explicitly requests a debug build. This script is local-only and must not be committed.
+- `npm install`: install frontend and Tauri CLI dependencies.
+- `npm run dev`: start the Vite frontend only.
+- `npm run tauri dev`: run the desktop app locally.
+- `npm run build`: type-check and build the frontend.
+- `cargo test` from `src-tauri/`: run Rust unit tests.
+- `cargo clippy --all-targets -- -D warnings` from `src-tauri/`: enforce Rust lint cleanliness.
+- `npm run tauri build`: build the release desktop executable and installer bundles.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File .codex-local\finish-task-install.ps1`: at the end of each task, build the latest release installer and install it locally without deleting existing app data. Local installs should use release packages only unless the user explicitly requests a debug build. This script is local-only and must not be committed.
 
 ## Coding Style & Naming Conventions
 
@@ -27,7 +25,7 @@ When the application version is incremented, complete the release flow after val
 
 ## Testing Guidelines
 
-Current automated tests are Rust unit tests in `src-tauri/src/*.rs`. Add tests beside the module they validate, using behavior-focused names such as `preferences_round_trip_as_camel_case_json`. For UI changes, run `rtk npm run build`; add frontend tests only once a test runner is introduced.
+Current automated tests are Rust unit tests in `src-tauri/src/*.rs`. Add tests beside the module they validate, using behavior-focused names such as `preferences_round_trip_as_camel_case_json`. For UI changes, run `npm run build`; add frontend tests only once a test runner is introduced.
 
 ## Commit & Pull Request Guidelines
 
