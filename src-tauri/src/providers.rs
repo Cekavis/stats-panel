@@ -598,9 +598,9 @@ fn subscribe_to_sensor_service(
         match reader.read_line(&mut line) {
             Ok(0) => return Ok(()),
             Ok(_) if line.trim().is_empty() => continue,
-            Ok(_) => match parse_helper_reading(line.trim()) {
-                Ok(reading) => provider.apply_helper_reading(reading),
-                Err(error) => return Err(error),
+            Ok(_) => {
+                let reading = parse_helper_reading(line.trim())?;
+                provider.apply_helper_reading(reading)
             },
             Err(error) => {
                 return Err(format!(
