@@ -121,7 +121,7 @@ function App() {
       if (!disposed) {
         setUpdateState(nextState);
       }
-    }, { automatic: true });
+    }, { automatic: true, install: false });
 
     return () => {
       disposed = true;

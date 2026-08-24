@@ -373,6 +373,8 @@ function getUpdateLabel(updateState: AppUpdateState) {
       return "Ready";
     case "upToDate":
       return "Current";
+    case "available":
+      return "Available";
     case "error":
       return "Retry";
     case "idle":
@@ -382,7 +384,11 @@ function getUpdateLabel(updateState: AppUpdateState) {
 }
 
 function getUpdatePillClassName(updateState: AppUpdateState) {
-  if (updateState.status === "upToDate" || updateState.status === "installed") {
+  if (
+    updateState.status === "upToDate" ||
+    updateState.status === "available" ||
+    updateState.status === "installed"
+  ) {
     return "status-pill is-online";
   }
 

@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Startup update checks no longer launch the elevated installer automatically; updates are installed from Settings.
+- Bumped the app version to 0.2.36.
+
 - Switched sensor IPC to a read-only named-pipe stream so ordinary clients can connect without broad pipe ACL mutation rights.
 
 - Moved hardware sensor collection into a protected per-machine Stats Panel Sensor service with read-only named-pipe IPC, automatic PawnIO repair, and no manual driver management.

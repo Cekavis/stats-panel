@@ -7,6 +7,7 @@ export type UpdateStatus =
   | "idle"
   | "checking"
   | "upToDate"
+  | "available"
   | "downloading"
   | "installing"
   | "installed"
@@ -32,9 +33,10 @@ export const INITIAL_UPDATE_STATE: AppUpdateState = {
 
 export async function checkAndInstallUpdate(
   emit: (state: AppUpdateState) => void,
-  options: { automatic?: boolean } = {},
+  options: { automatic?: boolean; install?: boolean } = {},
 ) {
   const automatic = options.automatic ?? false;
+  const install = options.install ?? true;
   emit({
     automatic,
     message: "Checking for updates...",
@@ -60,6 +62,16 @@ export async function checkAndInstallUpdate(
       currentVersion: update.currentVersion,
       version: update.version,
     };
+
+    if (!install) {
+      emit({
+        ...baseState,
+        checkedAt: new Date().toISOString(),
+        message: `Stats Panel ${update.version} is available. Open Settings to install it.`,
+        status: "available",
+      });
+      return;
+    }
 
     emit({
       ...baseState,
