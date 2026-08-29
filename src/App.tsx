@@ -111,23 +111,6 @@ function App() {
     };
   }, []);
 
-  useEffect(() => {
-    if (isSettingsView) {
-      return;
-    }
-
-    let disposed = false;
-    checkAndInstallUpdate((nextState) => {
-      if (!disposed) {
-        setUpdateState(nextState);
-      }
-    }, { automatic: true, install: false });
-
-    return () => {
-      disposed = true;
-    };
-  }, [isSettingsView]);
-
   const metricById = useMemo(
     () => new Map(manifest.map((metric) => [metric.id, metric])),
     [manifest],
@@ -239,7 +222,7 @@ function App() {
   }
 
   async function checkForUpdates() {
-    await checkAndInstallUpdate(setUpdateState);
+    await checkAndInstallUpdate(setUpdateState, { install: true });
   }
 
   async function restartForUpdate() {

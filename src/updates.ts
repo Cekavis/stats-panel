@@ -36,7 +36,7 @@ export async function checkAndInstallUpdate(
   options: { automatic?: boolean; install?: boolean } = {},
 ) {
   const automatic = options.automatic ?? false;
-  const install = options.install ?? true;
+  const install = options.install ?? false;
   emit({
     automatic,
     message: "Checking for updates...",
