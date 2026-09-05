@@ -4,6 +4,9 @@ All notable changes to Stats Panel are tracked here.
 
 ## Unreleased
 
+- Restored the main window's maximized state and target monitor across restarts.
+- Bumped the app version to 0.2.37.
+
 - Startup update checks no longer launch the elevated installer automatically; updates are installed from Settings.
 - Bumped the app version to 0.2.36.
 

@@ -61,6 +61,14 @@ pub struct WindowPreferences {
     pub height: f64,
     pub x: Option<f64>,
     pub y: Option<f64>,
+    #[serde(default)]
+    pub maximized: bool,
+    /// Physical coordinates used to select the display for a maximized window.
+    #[serde(default)]
+    pub maximized_x: Option<f64>,
+    /// Physical coordinates used to select the display for a maximized window.
+    #[serde(default)]
+    pub maximized_y: Option<f64>,
     pub always_on_top: bool,
     pub compact: bool,
 }
@@ -166,6 +174,9 @@ impl Default for WindowPreferences {
             height: 2160.0,
             x: None,
             y: None,
+            maximized: false,
+            maximized_x: None,
+            maximized_y: None,
             always_on_top: false,
             compact: false,
         }
@@ -227,6 +238,7 @@ mod tests {
             DEFAULT_LIGHT_CARD_BACKGROUND
         );
         assert_eq!(preferences.window.width, 1280.0);
+        assert!(!preferences.window.maximized);
     }
 
     #[test]
@@ -249,6 +261,28 @@ mod tests {
             preferences.chart_history_seconds
         );
         assert_eq!(parsed.launch_at_startup, preferences.launch_at_startup);
+        assert_eq!(parsed.window.maximized, preferences.window.maximized);
+        assert_eq!(parsed.window.maximized_x, preferences.window.maximized_x);
+        assert_eq!(parsed.window.maximized_y, preferences.window.maximized_y);
+    }
+
+    #[test]
+    fn maximized_window_preferences_round_trip_with_display_coordinates() {
+        let mut preferences = UserPreferences::default();
+        preferences.window.maximized = true;
+        preferences.window.maximized_x = Some(1920.0);
+        preferences.window.maximized_y = Some(-20.0);
+
+        let json = serde_json::to_string(&preferences).expect("preferences should serialize");
+        let parsed: UserPreferences =
+            serde_json::from_str(&json).expect("preferences should deserialize");
+
+        assert!(json.contains("maximized"));
+        assert!(json.contains("maximizedX"));
+        assert!(json.contains("maximizedY"));
+        assert!(parsed.window.maximized);
+        assert_eq!(parsed.window.maximized_x, Some(1920.0));
+        assert_eq!(parsed.window.maximized_y, Some(-20.0));
     }
 
     #[test]
@@ -274,6 +308,9 @@ mod tests {
         assert_eq!(parsed.chart_history_seconds, 60);
         assert_eq!(parsed.appearance, AppearancePreference::System);
         assert_eq!(parsed.colors, ThemeColors::default());
+        assert!(!parsed.window.maximized);
+        assert_eq!(parsed.window.maximized_x, None);
+        assert_eq!(parsed.window.maximized_y, None);
     }
 
     #[test]

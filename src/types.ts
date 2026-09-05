@@ -44,6 +44,9 @@ export type WindowPreferences = {
   height: number;
   x: number | null;
   y: number | null;
+  maximized: boolean;
+  maximizedX: number | null;
+  maximizedY: number | null;
   alwaysOnTop: boolean;
   compact: boolean;
 };

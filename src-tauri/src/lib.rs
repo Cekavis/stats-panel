@@ -12,8 +12,8 @@ use providers::{start_hardware_monitor_helper, HardwareMonitorProvider, Telemetr
 use std::{sync::Mutex, thread, time::Duration};
 use tauri::{
     menu::MenuBuilder, tray::TrayIconBuilder, App, AppHandle, Emitter, LogicalPosition,
-    LogicalSize, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
-    WindowEvent,
+    LogicalSize, Manager, PhysicalPosition, RunEvent, State, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt;
 
@@ -54,6 +54,9 @@ fn save_preferences(
     preferences.window.height = current_window.height;
     preferences.window.x = current_window.x;
     preferences.window.y = current_window.y;
+    preferences.window.maximized = current_window.maximized;
+    preferences.window.maximized_x = current_window.maximized_x;
+    preferences.window.maximized_y = current_window.maximized_y;
 
     apply_window_options(&app, &preferences.window)?;
     apply_startup_preference(&app, preferences.launch_at_startup)?;
@@ -276,7 +279,17 @@ fn apply_window_preferences(
         .set_size(LogicalSize::new(preferences.width, preferences.height))
         .map_err(|error| error.to_string())?;
 
-    if let (Some(x), Some(y)) = (preferences.x, preferences.y) {
+    if preferences.maximized {
+        if let Some((x, y)) = preferences.maximized_x.zip(preferences.maximized_y) {
+            window
+                .set_position(PhysicalPosition::new(x as i32, y as i32))
+                .map_err(|error| error.to_string())?;
+        } else if let Some((x, y)) = preferences.x.zip(preferences.y) {
+            window
+                .set_position(LogicalPosition::new(x, y))
+                .map_err(|error| error.to_string())?;
+        }
+    } else if let Some((x, y)) = preferences.x.zip(preferences.y) {
         window
             .set_position(LogicalPosition::new(x, y))
             .map_err(|error| error.to_string())?;
@@ -289,6 +302,10 @@ fn apply_window_preferences(
     window
         .set_always_on_top(preferences.always_on_top)
         .map_err(|error| error.to_string())?;
+
+    if preferences.maximized {
+        window.maximize().map_err(|error| error.to_string())?;
+    }
 
     Ok(())
 }
@@ -333,6 +350,7 @@ fn save_window_geometry(app: &AppHandle) {
     }
 
     let scale_factor = window.scale_factor().unwrap_or(1.0);
+    let is_maximized = window.is_maximized().unwrap_or(false);
     let Ok(size) = window.inner_size() else {
         return;
     };
@@ -350,10 +368,16 @@ fn save_window_geometry(app: &AppHandle) {
         return;
     };
 
-    preferences.window.width = width.clamp(320.0, 1_800.0);
-    preferences.window.height = height.clamp(420.0, 2_600.0);
-    preferences.window.x = Some(position.x as f64 / scale_factor);
-    preferences.window.y = Some(position.y as f64 / scale_factor);
+    preferences.window.maximized = is_maximized;
+    if is_maximized {
+        preferences.window.maximized_x = Some(position.x as f64);
+        preferences.window.maximized_y = Some(position.y as f64);
+    } else {
+        preferences.window.width = width.clamp(320.0, 1_800.0);
+        preferences.window.height = height.clamp(420.0, 2_600.0);
+        preferences.window.x = Some(position.x as f64 / scale_factor);
+        preferences.window.y = Some(position.y as f64 / scale_factor);
+    }
 
     let _ = save_preferences_to_disk(app, &preferences);
 }
